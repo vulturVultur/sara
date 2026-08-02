@@ -380,7 +380,7 @@ function Chicha() {
   useEffect(() => { const t = setInterval(next, 4500); return () => clearInterval(t); }, [next]);
 
   return (
-    <section id="chicha" className="py-16 md:py-24 bg-sara-ink text-white">
+    <section id="chicha" className="relative overflow-hidden bg-sara-ink text-white pt-16 md:pt-24 pb-28 md:pb-44">
       <div className="max-w-7xl mx-auto px-5 sm:px-8 grid md:grid-cols-2 gap-12 items-center">
         {/* Carrousel photos du salon */}
         <Reveal className="relative">
@@ -413,6 +413,9 @@ function Chicha() {
           </div>
         </Reveal>
       </div>
+
+      {/* vague de raccord vers la section À propos (fond crème) */}
+      <Wave fill="#FBEFD5" />
     </section>
   );
 }
