@@ -1,12 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600&display=swap');
 
+/* ==================================================================== */
+/*  Charte SARA — vert #203818, or #B67614, rouge #C60101.              */
+/*                                                                      */
+/*  Répartition : le blanc cassé porte la page, le vert et l'or sont    */
+/*  les fonds des BANDES pleine largeur, le rouge est un point.         */
+/*  Chaque couleur écrite en dur ici vient de tailwind.config.js.       */
+/* ==================================================================== */
+
 /* ------------------------------------------------------------------ */
 /*  Base                                                               */
 /* ------------------------------------------------------------------ */
 .sara-root {
   font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
-  color: #40241A;
-  background-color: #FBEFD5;
+  color: #203818;
+  background-color: #FAF7F0;
   -webkit-font-smoothing: antialiased;
 }
 .font-display {
@@ -14,7 +22,7 @@
   letter-spacing: .01em;
 }
 
-/* Titres de section façon FreshBox : condensé, MAJUSCULES, très serré */
+/* Titres de section : condensé, MAJUSCULES, très serré */
 .heading {
   font-family: 'Anton', ui-sans-serif, system-ui, sans-serif;
   text-transform: uppercase;
@@ -22,13 +30,15 @@
   line-height: .98;
 }
 
-/* Petit label de section « • About Us » */
+/* Petit label de section « • À propos » */
 .eyebrow {
   display: inline-flex;
   align-items: center;
   gap: .5rem;
   font-weight: 600;
   font-size: .95rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
 }
 .eyebrow::before {
   content: '';
@@ -37,46 +47,107 @@
   border-radius: 9999px;
   background: currentColor;
 }
+/* Le rouge en TEXTE tombe à 1,6:1 sur l'or et 3,5:1 sur le papier.
+   Sur ces fonds, le libellé prend une couleur lisible et seul le point
+   garde le rouge de la charte. */
+.eyebrow--dot-red::before { background: #C60101; }
 
 /* ------------------------------------------------------------------ */
-/*  Wordmark SARA (logo texte 3D façon FreshBox)                       */
+/*  Surfaces                                                           */
+/* ------------------------------------------------------------------ */
+
+/* Carte blanche posée sur le papier : c'est la photo du plat qui apporte
+   la couleur, pas le fond de la carte. */
+.card-light {
+  background: #FFFFFF;
+  border: 1px solid rgba(32, 56, 24, .09);
+  box-shadow: 0 14px 34px -22px rgba(32, 56, 24, .55);
+  transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+}
+.card-light:hover {
+  box-shadow: 0 22px 44px -22px rgba(32, 56, 24, .55);
+  border-color: rgba(182, 118, 20, .45);
+}
+
+/* Cadre or fin — réservé aux surfaces SOMBRES (bandes vertes, chicha),
+   où il reprend l'encadrement lumineux de l'enseigne. */
+.gold-frame {
+  border: 1px solid rgba(217, 160, 61, .38);
+  box-shadow: inset 0 0 0 1px rgba(217, 160, 61, .10);
+}
+
+/* Bandeau lumineux or (l'éclairage LED de l'enseigne) */
+.gold-glow {
+  background: linear-gradient(90deg,
+    rgba(182, 118, 20, 0) 0%,
+    rgba(182, 118, 20, .55) 18%,
+    rgba(217, 160, 61, .9) 50%,
+    rgba(182, 118, 20, .55) 82%,
+    rgba(182, 118, 20, 0) 100%);
+}
+
+/* Filet or décoratif entre deux éléments */
+.gold-rule {
+  height: 2px;
+  background: linear-gradient(90deg, rgba(182, 118, 20, 0), #B67614, rgba(182, 118, 20, 0));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Wordmark SARA (reprise typographique du logo)                       */
 /* ------------------------------------------------------------------ */
 .sara-wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  user-select: none;
+}
+.sara-wordmark__name {
   font-family: 'Anton', ui-sans-serif, system-ui, sans-serif;
   text-transform: uppercase;
   font-size: 2rem;
   line-height: 1;
-  letter-spacing: .02em;
-  color: #F5A623;
-  -webkit-text-stroke: 2px #A51E22;
-  paint-order: stroke fill;
-  text-shadow:
-    2px 2px 0 #A51E22,
-    3px 3px 0 rgba(126, 21, 24, .55);
-  user-select: none;
+  letter-spacing: .06em;
+  color: #F7EEDD;
 }
-.sara-wordmark--lg { font-size: 2.6rem; }
-.sara-wordmark--footer {
-  font-size: 2.4rem;
-  color: #F5A623;
-  -webkit-text-stroke: 0;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, .25);
+.sara-wordmark__sub {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-top: .2rem;
+  font-size: .5rem;
+  font-weight: 700;
+  letter-spacing: .34em;
+  text-indent: .34em;
+  text-transform: uppercase;
+  color: #C60101;
 }
+.sara-wordmark__sub::before,
+.sara-wordmark__sub::after {
+  content: '';
+  width: .9rem;
+  height: 2px;
+  background: #C60101;
+}
+/* Variante posée sur fond clair */
+.sara-wordmark--dark .sara-wordmark__name { color: #203818; }
+.sara-wordmark--footer .sara-wordmark__name { font-size: 2.4rem; }
 
-/* Bouton hamburger (carré rouge arrondi) */
+/* Bouton hamburger (carré arrondi, en-tête clair) */
 .sara-burger {
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 1rem;
-  background: #fff;
-  color: #40241A;
+  background: #FFFFFF;
+  border: 1px solid rgba(32, 56, 24, .12);
+  color: #203818;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px -12px rgba(31, 31, 31, .5);
-  transition: transform .15s ease, background .15s ease, color .15s ease;
+  box-shadow: 0 8px 20px -14px rgba(32, 56, 24, .7);
+  transition: transform .15s ease, background .15s ease, color .15s ease, border-color .15s ease;
 }
-.sara-burger:hover { background: #A51E22; color: #fff; }
+.sara-burger:hover { background: #C60101; border-color: #C60101; color: #fff; }
 .sara-burger:active { transform: scale(.94); }
 
 /* Boutons icônes (panier / compte) à droite de l'en-tête */
@@ -87,16 +158,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #40241A;
-  background: #fff;
-  box-shadow: 0 6px 16px -10px rgba(31, 31, 31, .5);
-  transition: transform .15s ease, background .15s ease, color .15s ease;
+  color: #203818;
+  background: #FFFFFF;
+  border: 1px solid rgba(32, 56, 24, .12);
+  box-shadow: 0 6px 16px -12px rgba(32, 56, 24, .7);
+  transition: transform .15s ease, background .15s ease, color .15s ease, border-color .15s ease;
 }
-.sara-iconbtn:hover { background: #A51E22; color: #fff; }
+.sara-iconbtn:hover { background: #C60101; border-color: #C60101; color: #fff; }
 .sara-iconbtn:active { transform: scale(.94); }
 
 /* ------------------------------------------------------------------ */
-/*  Vague (wave) façon FreshBox                                        */
+/*  Vague (wave) de séparation entre sections                           */
 /* ------------------------------------------------------------------ */
 .sara-wave {
   display: block;
@@ -108,20 +180,23 @@
 }
 @media (min-width: 768px) { .sara-wave { height: 96px; } }
 
-/* Bandeau damier rouge/crème (page Menu) */
-.checker {
-  height: 3rem;
-  background: repeating-conic-gradient(#C0201F 0 25%, #FBEFD5 0 50%) 0 0 / 3rem 3rem;
-}
-@media (min-width: 768px) { .checker { height: 3.5rem; background-size: 3.5rem 3.5rem; } }
+/* Variante haute : la vague retombe depuis le haut de la section */
+.sara-wave--top { top: -1px; bottom: auto; }
 
-/* Arche (About) : haut arrondi, bas droit */
+/* Bandeau damier or / vert profond (page Menu) */
+.checker {
+  height: 2.5rem;
+  background: repeating-conic-gradient(#B67614 0 25%, #203818 0 50%) 0 0 / 2.5rem 2.5rem;
+}
+@media (min-width: 768px) { .checker { height: 3rem; background-size: 3rem 3rem; } }
+
+/* Arche (À propos) : haut arrondi, bas droit */
 .sara-arch {
   border-radius: 46% 46% 8% 8% / 34% 34% 6% 6%;
   overflow: hidden;
 }
 
-/* Badge « Save up to » en étoile */
+/* Badge « Jusqu'à -x% » en étoile */
 .sara-starburst {
   clip-path: polygon(
     50% 0%, 61% 15%, 79% 9%, 76% 28%, 95% 32%, 82% 47%, 98% 60%,
@@ -152,8 +227,8 @@
   50% { transform: translateY(-14px) rotate(6deg); }
 }
 
-/* Boutons hero : reflet lumineux qui balaie + halo au survol
-   (d'après le composant Uiverse de mrhyddenn, adapté à la charte rouge) */
+/* Boutons hero : reflet lumineux qui balaie + halo doré au survol
+   (d'après le composant Uiverse de mrhyddenn, adapté à la charte) */
 .sara-shine {
   position: relative;
   overflow: hidden;
@@ -161,7 +236,7 @@
   transition: background-color 0.2s ease-in, box-shadow 0.2s ease-in;
 }
 .sara-shine:hover {
-  box-shadow: 0 0 26px 3px rgba(232, 137, 11, 0.55);
+  box-shadow: 0 0 26px 3px rgba(217, 160, 61, 0.55);
   transition: background-color 0.2s ease-out, box-shadow 0.2s ease-out;
 }
 .sara-shine:active {
@@ -177,8 +252,8 @@
   top: 7%;
   left: 0;
   opacity: 0;
-  background: #fff;
-  box-shadow: 0 0 50px 30px #fff;
+  background: #F2E2C2;
+  box-shadow: 0 0 50px 30px #F2E2C2;
   transform: skewX(-20deg);
   pointer-events: none;
   z-index: 1;
@@ -225,8 +300,13 @@
 /*  Placeholder « Photo à venir »                                      */
 /* ------------------------------------------------------------------ */
 .sara-placeholder {
-  background-color: #F3E6C8;
-  background-image: repeating-linear-gradient(45deg, rgba(165, 30, 34, .07) 0 10px, transparent 10px 20px);
+  background-color: #F0E8D6;
+  background-image: repeating-linear-gradient(45deg, rgba(32, 56, 24, .07) 0 10px, transparent 10px 20px);
+}
+/* Variante posée sur une bande sombre */
+.sara-placeholder--dark {
+  background-color: #1A2E13;
+  background-image: repeating-linear-gradient(45deg, rgba(217, 160, 61, .10) 0 10px, transparent 10px 20px);
 }
 
 /* ------------------------------------------------------------------ */
@@ -242,6 +322,9 @@
 .z-55 { z-index: 55; }
 .z-60 { z-index: 60; }
 .z-70 { z-index: 70; }
+
+/* Sélection de texte aux couleurs de la charte */
+::selection { background: #C60101; color: #F7EEDD; }
 
 /* ------------------------------------------------------------------ */
 /*  Animations d'apparition                                            */
