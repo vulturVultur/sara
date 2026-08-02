@@ -96,6 +96,14 @@ const CATERING = [
   { label: 'Plat 3', name: 'Durum & Grillades', image: IMG.durum, emoji: '🌯', description: 'Galettes roulées grillées minute, viandes marinées et sauces au choix.' },
 ];
 
+/* Photos du salon chicha — remplace/complète avec tes propres visuels.
+   Mets les fichiers dans public/img/ et renseigne le chemin (ex : '/img/salon-1.jpg'). */
+const CHICHA_PHOTOS = [
+  { src: IMG.chicha, emoji: '💨', alt: "Espace chicha à l'ambiance tamisée" },
+  { src: IMG.salle, emoji: '🛋️', alt: 'Le salon Sara, cadre cosy et chaleureux' },
+  { src: null, emoji: '💨', alt: 'Photo du salon chicha à venir' },
+];
+
 const REVIEWS = [
   { name: 'Yanis B.', role: 'Client fidèle', comment: 'Meilleur kebab du quartier ! Viande tendre, frites maison, service rapide. Je reviens à chaque fois avec le même plaisir.' },
   { name: 'Sarah M.', role: 'Habituée chicha', comment: 'L’espace chicha est super cosy et les parfums sont excellents. Une super soirée du début à la fin, à refaire.' },
@@ -128,6 +136,7 @@ const NAV = [
   { href: '#accueil', label: 'Accueil' },
   { href: '#categories', label: 'Catégories' },
   { href: '#menu', label: 'Menu' },
+  { href: '#chicha', label: 'Chicha' },
   { href: '#about', label: 'À propos' },
   { href: '#catering', label: 'Traiteur' },
   { href: '#galerie', label: 'Galerie' },
@@ -430,6 +439,55 @@ function DiscoverMenu() {
             </Reveal>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Chicha — carrousel du salon                                        */
+/* ------------------------------------------------------------------ */
+
+function Chicha() {
+  const [i, setI] = useState(0);
+  const n = CHICHA_PHOTOS.length;
+  const next = useCallback(() => setI((p) => (p + 1) % n), [n]);
+  const prev = () => setI((p) => (p - 1 + n) % n);
+  useEffect(() => { const t = setInterval(next, 4500); return () => clearInterval(t); }, [next]);
+
+  return (
+    <section id="chicha" className="py-16 md:py-24 bg-sara-ink text-white">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 grid md:grid-cols-2 gap-12 items-center">
+        {/* Carrousel photos du salon */}
+        <Reveal className="relative">
+          <div className="relative rounded-3xl overflow-hidden aspect-4-3 shadow-2xl ring-1 ring-white/10">
+            {CHICHA_PHOTOS.map((ph, idx) => (
+              <div key={idx} className={`absolute inset-0 transition-opacity duration-700 ${idx === i ? 'opacity-100' : 'opacity-0'}`} aria-hidden={idx !== i}>
+                <Img src={ph.src} emoji={ph.emoji} alt={ph.alt} className="w-full h-full object-cover" />
+              </div>
+            ))}
+            <button onClick={prev} className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 text-sara-brown flex items-center justify-center hover:bg-white transition" aria-label="Photo précédente"><ChevronLeft className="w-5 h-5" /></button>
+            <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 text-sara-brown flex items-center justify-center hover:bg-white transition" aria-label="Photo suivante"><ChevronRight className="w-5 h-5" /></button>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+              {CHICHA_PHOTOS.map((_, idx) => (
+                <button key={idx} onClick={() => setI(idx)} className={`h-2 rounded-full transition-all ${idx === i ? 'w-7 bg-white' : 'w-2 bg-white/50'}`} aria-label={`Photo ${idx + 1}`} />
+              ))}
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Texte + bouton */}
+        <Reveal delay={100}>
+          <Eyebrow className="text-sara-orange">Espace Chicha</Eyebrow>
+          <h2 className="heading text-white text-4xl sm:text-5xl mt-3">Découvrez nos chichas</h2>
+          <p className="mt-5 text-white/70 leading-relaxed">
+            Détendez-vous dans notre salon à l'ambiance tamisée. Chicha premium, large choix
+            de parfums et service soigné — l'endroit idéal pour prolonger la soirée entre amis.
+          </p>
+          <div className="mt-8">
+            <PillLink href="#contact" variant="red"><Flame className="w-5 h-5" /> Réserver ma chicha</PillLink>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -792,6 +850,7 @@ export default function SaraSite() {
         <Categories />
         <SpecialOffers />
         <DiscoverMenu />
+        <Chicha />
         <About />
         <WhyChoose />
         <Catering />
