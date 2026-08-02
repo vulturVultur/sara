@@ -527,10 +527,10 @@ function CtaFooter() {
     <footer id="contact" className="bg-sara-red text-white">
       {/* bandeau CTA jaune */}
       <div className="relative overflow-hidden bg-sara-orange">
-        <span className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 w-40 sm:w-56 opacity-95" aria-hidden="true">
+        <span className="hidden lg:block pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 w-48 xl:w-56 opacity-95" aria-hidden="true">
           <Img src={IMG.broche} emoji="🍗" alt="" className="w-full object-contain drop-shadow-xl" />
         </span>
-        <span className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-40 sm:w-56 opacity-95" aria-hidden="true">
+        <span className="hidden lg:block pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-48 xl:w-56 opacity-95" aria-hidden="true">
           <Img src={IMG.assietteAlt} emoji="🍕" alt="" className="w-full object-contain drop-shadow-xl" />
         </span>
         <div className="max-w-2xl mx-auto px-5 text-center py-16 md:py-24 relative">
