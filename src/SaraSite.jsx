@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './sara.css';
 import {
   Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
-  ChevronDown, Flame,
+  ChevronDown, Flame, Minus, Plus, Trash2, ShoppingCart,
   MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
   ShoppingBag, User,
 } from 'lucide-react';
 import { MENU_CATEGORIES, MENU_ITEMS, categoryLabel, formatChf } from './data/menuItems';
+import { useCart } from './contexts/CartContext.jsx';
 
 /* ------------------------------------------------------------------ */
 /*  Charte graphique                                                   */
@@ -209,7 +210,7 @@ function Reveal({ children, delay = 0, className = '', as: Tag = 'div', ...rest 
 }
 
 /* Bouton pilule (coin haut-droit rogné) */
-function PillLink({ href = '#/carte', children, variant = 'red', className = '' }) {
+function PillLink({ href = '#/carte', children, variant = 'red', className = '', ...rest }) {
   const styles = {
     red: 'bg-sara-red text-white hover:bg-sara-redDeep',
     gold: 'bg-sara-gold text-sara-ink hover:bg-sara-goldDeep hover:text-sara-goldPale',
@@ -220,6 +221,7 @@ function PillLink({ href = '#/carte', children, variant = 'red', className = '' 
     <a
       href={href}
       className={`group inline-flex items-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none transition ${styles[variant]} ${className}`}
+      {...rest}
     >
       {children}
       <ArrowUpRight className="w-5 h-5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -249,6 +251,7 @@ function Wordmark({ className = '' }) {
 
 function Header() {
   const [mobile, setMobile] = useState(false);
+  const { count, openCart } = useCart();
   return (
     <header className="relative z-50 bg-sara-paper">
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
@@ -267,7 +270,19 @@ function Header() {
           </div>
           {/* Droite : panier + compte */}
           <div className="flex justify-end items-center gap-2 sm:gap-3">
-            <a href="#/carte" className="sara-iconbtn" aria-label="Panier"><ShoppingBag className="w-5 h-5" /></a>
+            <button
+              type="button"
+              onClick={openCart}
+              className="sara-iconbtn relative"
+              aria-label={count ? `Panier, ${count} article${count > 1 ? 's' : ''}` : 'Panier (vide)'}
+            >
+              <ShoppingBag className="w-5 h-5" />
+              {count > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-sara-red text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-sara-paper">
+                  {count}
+                </span>
+              )}
+            </button>
             <a href="#contact" className="sara-iconbtn" aria-label="Mon compte"><User className="w-5 h-5" /></a>
           </div>
         </div>
@@ -292,6 +307,161 @@ function Header() {
         </div>
       )}
     </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Panier — tiroir latéral                                            */
+/* ------------------------------------------------------------------ */
+
+/* Une ligne de panier. ATTENTION : `removeItem` et `updateQty` du
+   CartContext prennent la LIGNE ENTIÈRE, pas un id — ils retrouvent la ligne
+   en comparant nom + prix + desc (`sameLine`). Leur passer un id ne lève
+   aucune erreur et ne fait simplement rien. */
+function CartLine({ line }) {
+  const { updateQty, removeItem } = useCart();
+  return (
+    <li className="card-light rounded-2xl p-3 flex gap-3 items-start">
+      <span className="text-2xl leading-none pt-1 shrink-0" aria-hidden="true">{line.emoji ?? '🍽️'}</span>
+
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-sara-green leading-tight">{line.name}</p>
+        {/* `desc` porte la personnalisation (« sans oignon », suppléments…) :
+            c'est ce qui distingue deux lignes du même produit. */}
+        {line.desc ? <p className="mt-0.5 text-xs text-sara-muted clamp-2">{line.desc}</p> : null}
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="inline-flex items-center rounded-full border border-sara-green/15 bg-white">
+            <button
+              type="button"
+              onClick={() => updateQty(line, line.quantity - 1)}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sara-green hover:text-sara-red transition"
+              aria-label={`Retirer un ${line.name}`}
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <span className="w-7 text-center text-sm font-bold text-sara-green tabular-nums">{line.quantity}</span>
+            <button
+              type="button"
+              onClick={() => updateQty(line, line.quantity + 1)}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sara-green hover:text-sara-red transition"
+              aria-label={`Ajouter un ${line.name}`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <span className="font-display text-lg text-sara-green tabular-nums">{formatChf(line.price * line.quantity)}</span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => removeItem(line)}
+        className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sara-muted hover:text-sara-red hover:bg-sara-red/10 transition"
+        aria-label={`Supprimer ${line.name} du panier`}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </li>
+  );
+}
+
+function CartDrawer() {
+  const { items, count, total, isCartOpen, closeCart, clearCart } = useCart();
+
+  // Échap pour fermer + blocage du défilement de la page derrière le tiroir.
+  useEffect(() => {
+    if (!isCartOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') closeCart(); };
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isCartOpen, closeCart]);
+
+  if (!isCartOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80]" role="dialog" aria-modal="true" aria-label="Votre panier">
+      <div className="absolute inset-0 bg-sara-ink/50 fade-in" onClick={closeCart} />
+
+      <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-sara-paper shadow-2xl flex flex-col">
+        {/* en-tête */}
+        <div className="shrink-0 px-5 py-4 flex items-center justify-between border-b border-sara-green/10">
+          <h2 className="heading text-sara-green text-2xl flex items-center gap-2">
+            Votre panier
+            {count > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-sara-red text-white text-xs font-bold align-middle">{count}</span>
+            )}
+          </h2>
+          <button
+            type="button"
+            onClick={closeCart}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-sara-green hover:bg-sara-red hover:text-white transition"
+            aria-label="Fermer le panier"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="gold-glow h-[2px] w-full shrink-0" aria-hidden="true" />
+
+        {/* contenu */}
+        {items.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-8 gap-4">
+            <span className="w-20 h-20 rounded-full bg-sara-paperAlt flex items-center justify-center" aria-hidden="true">
+              <ShoppingCart className="w-8 h-8 text-sara-green/40" />
+            </span>
+            <p className="heading text-sara-green text-xl">Votre panier est vide</p>
+            <p className="text-sara-muted text-sm">Ajoutez un plat depuis la carte et il apparaîtra ici.</p>
+            <PillLink href={MENU_ROUTE} variant="red" className="mt-2" onClick={closeCart}>
+              <Flame className="w-5 h-5" /> Voir la carte
+            </PillLink>
+          </div>
+        ) : (
+          <ul className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {items.map((line, i) => (
+              <CartLine key={`${line.name}|${line.price}|${line.desc ?? ''}|${i}`} line={line} />
+            ))}
+          </ul>
+        )}
+
+        {/* pied : total + suite du parcours */}
+        {items.length > 0 && (
+          <div className="shrink-0 border-t border-sara-green/10 px-5 py-4 bg-white">
+            <div className="flex items-center justify-between">
+              <span className="text-sara-muted font-medium">Total</span>
+              <span className="font-display text-3xl text-sara-green tabular-nums">{formatChf(total)}</span>
+            </div>
+
+            {/* Le tunnel de commande (emporter/livraison, paiement) est l'étape
+                suivante du brief : le bouton reste inactif plutôt que de
+                pointer vers une route qui n'existe pas encore. */}
+            <button
+              type="button"
+              disabled
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white opacity-50 cursor-not-allowed"
+            >
+              <Flame className="w-5 h-5" /> Passer commande
+            </button>
+            <p className="mt-2 text-center text-xs text-sara-muted">
+              Le tunnel de commande et le paiement arrivent à la prochaine étape.
+            </p>
+
+            <button
+              type="button"
+              onClick={clearCart}
+              className="mt-3 w-full text-center text-xs font-semibold uppercase tracking-widest text-sara-muted hover:text-sara-red transition"
+            >
+              Vider le panier
+            </button>
+          </div>
+        )}
+      </aside>
+    </div>
   );
 }
 
@@ -628,6 +798,16 @@ function ProductCard({ p }) {
      accroche l'œil. Les autres restent blanches pour laisser la couleur aux
      photos des plats. */
   const f = p.id === FEATURED_ID;
+  const { addItem, openCart } = useCart();
+
+  /* `desc` est OBLIGATOIRE, même vide : le panier ne fusionne deux lignes que
+     si nom + prix + desc sont identiques. L'omettre ferait fusionner deux
+     personnalisations différentes du même plat (bug déjà vécu chez Flash
+     Pizzas). Le catalogue n'a pas encore d'options, donc '' pour l'instant. */
+  const ajouter = () => {
+    addItem({ name: p.name, price: p.price, desc: '', emoji: p.emoji });
+    openCart();
+  };
   return (
     <article className={`rounded-3xl overflow-hidden flex flex-col ${f ? 'bg-sara-green gold-frame shadow-[0_20px_44px_-24px_rgba(32,56,24,.85)]' : 'card-light'}`}>
       <div className={`aspect-4-3 ${f ? 'bg-sara-greenDeep' : 'bg-sara-paperAlt'}`}>
@@ -649,7 +829,12 @@ function ProductCard({ p }) {
           </button>
           <div className="flex items-center justify-between mt-4">
             <span className={`font-display text-2xl ${f ? 'text-sara-goldLight' : 'text-sara-green'}`}>{formatChf(p.price)}</span>
-            <button type="button" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-sara-red text-white text-xs font-bold uppercase tracking-widest hover:bg-sara-redDeep transition">
+            <button
+              type="button"
+              onClick={ajouter}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-sara-red text-white text-xs font-bold uppercase tracking-widest hover:bg-sara-redDeep active:scale-95 transition"
+              aria-label={`Ajouter ${p.name} au panier`}
+            >
               <Flame className="w-4 h-4" /> Commander
             </button>
           </div>
@@ -809,6 +994,7 @@ export default function SaraSite() {
     <div className="sara-root min-h-screen">
       <a href={MENU_ROUTE} className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-red focus:text-white">Aller au menu</a>
       <Header />
+      <CartDrawer />
       {isMenu ? (
         <MenuPage />
       ) : (
