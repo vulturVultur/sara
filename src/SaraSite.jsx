@@ -98,11 +98,6 @@ const GALLERY = [
   { src: IMG.tacos, emoji: '🍕', alt: 'Tacos XL et sauce fromagère' },
 ];
 
-const POSTS = [
-  { image: IMG.burger, emoji: '🍔', read: '4 min', date: '24 avr. 2026', title: 'Le secret d’un burger juteux et parfait' },
-  { image: IMG.tacos, emoji: '🍕', read: '4 min', date: '15 juin 2026', title: 'Pourquoi des ingrédients frais changent tout' },
-];
-
 const NAV = [
   { href: '#accueil', label: 'Accueil' },
   { href: '#menu', label: 'Menu' },
@@ -519,52 +514,6 @@ function GallerySection() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Blog                                                               */
-/* ------------------------------------------------------------------ */
-
-function Blog() {
-  return (
-    <section id="blog" className="py-16 md:py-24 bg-sara-cream">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-12">
-          <div>
-            <Eyebrow>Blog</Eyebrow>
-            <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Tendances &<br />histoires gourmandes</h2>
-          </div>
-          <div className="max-w-sm md:text-right">
-            <p className="text-sara-muted">
-              Découvrez les dernières tendances food, recettes et coulisses de notre cuisine,
-              de nos chefs et de notre aventure culinaire.
-            </p>
-            <PillLink href="#blog" className="mt-6">Explorer le blog</PillLink>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          {POSTS.map((p, i) => (
-            <Reveal key={p.title} delay={i * 100}>
-              <article className="bg-white rounded-3xl p-4 sm:p-5">
-                <div className="aspect-4-3 rounded-2xl overflow-hidden">
-                  <Img src={p.image} emoji={p.emoji} alt={p.title} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex items-center justify-between mt-4 text-sm font-medium text-sara-red">
-                  <span>Lecture : {p.read}</span>
-                  <span>{p.date}</span>
-                </div>
-                <h3 className="heading text-sara-brown text-2xl mt-3">{p.title}</h3>
-                <div className="mt-5">
-                  <PillLink href="#blog">Lire l'article</PillLink>
-                </div>
-              </article>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  CTA + Footer                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -658,7 +607,6 @@ export default function SaraSite() {
         <About />
         <FaqSection />
         <GallerySection />
-        <Blog />
       </main>
       <CtaFooter />
     </div>
