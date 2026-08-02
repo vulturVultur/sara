@@ -8,7 +8,30 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Phase 0
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
+        sync: false
+      # Phase 2/3 — mettre l'URL Render (ou domaine custom) une fois connue
+      - key: BASE_URL
+        sync: false
+      # Phase 3 — paiement
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # Phase 4 — suivi + notif patron
+      - key: ADMIN_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      # Phase 5 — dashboard patron
+      - key: BOSS_EMAIL
+        sync: false
+      - key: BOSS_PASSWORD
         sync: false
