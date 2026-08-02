@@ -312,8 +312,8 @@ function Hero() {
       {/* boutons + points du carrousel */}
       <div className="relative z-10 text-center px-5 pt-6 pb-16 md:pb-20">
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <PillLink href="#/carte" variant="red"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
-          <PillLink href="#/carte" variant="dark">Voir le menu</PillLink>
+          <PillLink href="#/carte" variant="red" className="sara-shine"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
+          <PillLink href="#/carte" variant="dark" className="sara-shine">Voir le menu</PillLink>
         </div>
         <div className="mt-8 flex justify-center gap-2">
           {HERO_DISHES.map((_, i) => (
