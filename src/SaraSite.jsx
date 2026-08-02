@@ -605,8 +605,8 @@ export default function SaraSite() {
         <SpecialOffers />
         <Chicha />
         <About />
-        <FaqSection />
         <GallerySection />
+        <FaqSection />
       </main>
       <CtaFooter />
     </div>
