@@ -89,10 +89,36 @@ Pizzas pour le détail de chaque mécanisme — ce fichier ne fait qu'indiquer o
   frontend aura choisis pour panier/checkout (voir `docs/brief-frontend-collegue.md`) — ce
   fichier est la source à faire évoluer ensemble, pas à dupliquer une deuxième fois ailleurs.
 
-### ⬜ Phase 2 — Panier + espace client
-`CartContext` (fusion des lignes par nom+prix+desc, PAS par nom seul — c'est le bug corrigé
-chez Flash le 5 juillet 2026, à éviter dès le départ). Auth : PBKDF2 + cookie `HttpOnly`,
-endpoints `/api/auth/*` + `/api/me/*`, checkout invité possible.
+### ✅ Phase 2 — Panier + espace client (backend + logique fait, 2 août 2026)
+- `server/db.ts` : `User`/`Session` + CRUD (`findUserByEmail`, `createUser`, `updateUser`,
+  `updatePassword`, `verifyPassword` à temps constant, `toggleFavorite`, `safeUser` — retire
+  toujours `passwordHash`/`emailVerifToken` avant de renvoyer un user) + sessions
+  (`createSession`, `findSession`, `deleteSession`, `deleteUserSessions`).
+- `server/api.ts` : cookie `sara_session` (HttpOnly, `SameSite=Strict`, `Secure` en prod — nom
+  différent de `fp_session` chez Flash, deux sites distincts, pas de collision possible de
+  toute façon mais plus clair). Rate limiting in-memory par IP (register 5/10min, login
+  10/min). Routes : `POST /api/auth/register|login|logout`, `GET/PUT /api/me`,
+  `PUT /api/me/password` (invalide toutes les sessions puis recrée celle de l'appareil
+  courant), `POST /api/me/favorites` (toggle par id produit).
+- `src/contexts/AuthContext.jsx` + `src/contexts/CartContext.jsx` : logique/état seulement,
+  **aucune UI** — exprès, pour ne pas empiéter sur le travail du collègue frontend
+  (`docs/brief-frontend-collegue.md`). `CartProvider` persiste en `localStorage`
+  (`sara_cart`), fusionne les lignes par nom+prix+desc (`sameLine`) comme chez Flash. Les deux
+  providers sont montés dans `src/main.jsx`, aucun composant ne les consomme encore.
+- ⚠️ **Pas d'email de vérification envoyé** (contrairement à Flash) : `RESEND_API_KEY` n'est
+  pas configuré, `email_verified` reste `false` sans bloquer la connexion (comme chez Flash,
+  qui ne gate jamais le login sur ce champ non plus) — la colonne/le token existent déjà en
+  base pour brancher Resend plus tard sans migration.
+- **Vérifié réellement contre le vrai Supabase** (pas supposé) : script de test complet —
+  inscription, doublon d'email → 409, mauvais mot de passe → 401, `/api/me` avec cookie,
+  favoris, mise à jour profil, **et surtout** : changement de mot de passe avec deux sessions
+  actives → l'ancienne session (`cookies2`) devient 401 après coup, la session courante reste
+  valide (renouvelée). Déconnexion → `/api/me` repasse à 401. Utilisateur de test supprimé
+  après coup (`DELETE .../rest/v1/users` avec la clé service_role, cascade sur `sessions`).
+  `npm run check` + `npm run build` ✅.
+- **Pas encore fait** : aucun écran (connexion/inscription/compte/panier visible) — c'est le
+  périmètre du collègue frontend. Checkout invité pas testable avant la Phase 3
+  (`POST /api/orders` n'existe pas encore, `user_id` nullable déjà prévu dans le schéma).
 
 ### ⬜ Phase 3 — Commande + paiement
 `POST /api/orders`, Stripe Embedded Checkout en capture manuelle, webhook idempotent.
