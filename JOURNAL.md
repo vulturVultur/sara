@@ -1,5 +1,28 @@
 # Journal de bord — SARA
 
+## 2026-08-03 — fusion backend + panier fonctionnel (non poussé)
+**Fait** : `origin/main` (backend Phases 0-5) fusionné dans
+`design/charte-graphique` — les deux partaient du même commit `a4c1f76`,
+c'étaient des branches sœurs. Un seul recouvrement réel, `src/SaraSite.jsx`.
+Puis étape 1-2 du brief frontend : tiroir panier + bouton « Commander » sur
+chaque plat. 3 commits d'avance sur `origin/main`, rien de poussé.
+**En cours** : rien.
+**Suivant** : connexion/inscription, tunnel de commande (`placeOrder` cash et
+`createStripeCheckout` carte — `@stripe/react-stripe-js` pas encore installé),
+suivi de commande, espace `/compte`. Bloqué sur les valeurs `.env` (Supabase +
+Stripe test) à demander à Ayoub.
+**Décisions** :
+- **La consigne « garder `sara.red/cream/orange/brown` » du brief frontend est
+  périmée** : elle a été écrite avant la charte du patron et désigne des jetons
+  supprimés. La charte vert/or/rouge est conservée. À confirmer avec Ayoub.
+- `featured` n'entre pas dans `menuItems.ts` (fichier partagé avec le backend) :
+  la mise en avant est une décision d'affichage → constante `FEATURED_ID`.
+- Le bouton « Passer commande » du panier reste inactif tant que le tunnel
+  n'existe pas — un lien vers une route absente serait pire.
+- **Piège d'API** : `removeItem(ligne)` et `updateQty(ligne, qty)` prennent la
+  ligne entière, pas un id (comparaison `sameLine`). Un id ne lève aucune
+  erreur et ne fait rien.
+
 ## 2026-08-02 — refonte de la charte graphique (terminée, non committée)
 **Fait** : nouvelle charte appliquée à tout le site (vert `#203818`, or
 `#B67614`, rouge `#C60101`) sur la branche `design/charte-graphique` — jetons
