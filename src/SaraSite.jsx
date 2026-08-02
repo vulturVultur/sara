@@ -28,6 +28,27 @@ const IMG = {
   chicha: '/img/chicha.jpg',
 };
 
+/* Légumes découpés (fond transparent) pour la décoration du hero. */
+const VEG = {
+  tomato: '/img/veg/tomato.png',
+  cherryTomato: '/img/veg/cherry-tomato.png',
+  onion: '/img/veg/onion.png',
+  carrot: '/img/veg/carrot.png',
+  carrotSlice: '/img/veg/carrot-slice.png',
+  cabbage: '/img/veg/cabbage.png',
+  leaf: '/img/veg/leaf.png',
+};
+
+/* Décor flottant du hero : vrais légumes détourés répartis autour du titre. */
+const HERO_DECOR = [
+  { img: VEG.tomato,       alt: 'Tomate fraîche',      pos: 'left-2 sm:left-8 top-8 sm:top-14 w-16 sm:w-20 md:w-24',            anim: 'floaty',      rot: -9 },
+  { img: VEG.leaf,         alt: "Feuille d'épinard",   pos: 'left-5 sm:left-24 bottom-6 sm:bottom-10 w-11 sm:w-14 md:w-16',     anim: 'floaty-slow', rot: 12 },
+  { img: VEG.carrot,       alt: 'Carotte',             pos: 'hidden sm:block left-3 md:left-12 top-1/2 w-7 md:w-9',             anim: 'floaty-slow', rot: -16 },
+  { img: VEG.cherryTomato, alt: 'Tomate cerise',       pos: 'right-4 sm:right-16 top-6 sm:top-12 w-12 sm:w-14 md:w-16',         anim: 'floaty-slow', rot: 8 },
+  { img: VEG.onion,        alt: 'Oignon rouge',        pos: 'hidden sm:block right-6 md:right-14 top-24 md:top-28 w-16 md:w-20', anim: 'floaty',      rot: -7 },
+  { img: VEG.cabbage,      alt: 'Chou rouge',          pos: 'right-1 sm:right-10 bottom-5 sm:bottom-12 w-16 sm:w-24 md:w-28',   anim: 'floaty',      rot: 7 },
+];
+
 /* Infos de contact — À CONFIRMER par le client (placeholder). */
 const INFO = {
   name: 'Sara Pizzeraya Kebap',
@@ -271,11 +292,12 @@ function Hero() {
     <section id="accueil" className="relative overflow-hidden bg-sara-cream">
       {/* bloc rouge : décor + titre */}
       <div className="relative bg-sara-red pt-14 md:pt-20 pb-40 md:pb-56">
-        {/* décor flottant */}
-        <span className="pointer-events-none absolute left-4 top-16 text-3xl sm:text-4xl floaty opacity-90" aria-hidden="true">🌶️</span>
-        <span className="pointer-events-none absolute left-20 bottom-10 text-2xl sm:text-3xl floaty-slow opacity-80" aria-hidden="true">🌿</span>
-        <span className="pointer-events-none absolute right-8 top-24 text-3xl sm:text-4xl floaty-slow opacity-90" aria-hidden="true">🍅</span>
-        <span className="pointer-events-none absolute right-24 bottom-16 text-2xl sm:text-3xl floaty opacity-80" aria-hidden="true">🌶️</span>
+        {/* décor flottant : vrais légumes détourés */}
+        {HERO_DECOR.map((d, i) => (
+          <span key={i} className={`pointer-events-none absolute ${d.pos} ${d.anim} select-none`} aria-hidden="true">
+            <img src={d.img} alt="" className="w-full h-auto drop-shadow-xl" style={{ transform: `rotate(${d.rot}deg)` }} loading="lazy" />
+          </span>
+        ))}
 
         <div className="max-w-5xl mx-auto px-5 sm:px-8 text-center relative z-10">
           <p className="text-sara-creamSoft/90 font-medium tracking-wide mb-6">• Frais • Rapide • Savoureux</p>
