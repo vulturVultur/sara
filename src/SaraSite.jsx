@@ -28,27 +28,6 @@ const IMG = {
   chicha: '/img/chicha.jpg',
 };
 
-/* Légumes découpés (fond transparent) pour la décoration du hero. */
-const VEG = {
-  tomato: '/img/veg/tomato.png',
-  cherryTomato: '/img/veg/cherry-tomato.png',
-  onion: '/img/veg/onion.png',
-  carrot: '/img/veg/carrot.png',
-  carrotSlice: '/img/veg/carrot-slice.png',
-  cabbage: '/img/veg/cabbage.png',
-  leaf: '/img/veg/leaf.png',
-};
-
-/* Décor flottant du hero : vrais légumes détourés répartis autour du titre. */
-const HERO_DECOR = [
-  { img: VEG.tomato,       alt: 'Tomate fraîche',      pos: 'left-2 sm:left-8 top-8 sm:top-14 w-16 sm:w-20 md:w-24',            anim: 'floaty',      rot: -9 },
-  { img: VEG.leaf,         alt: "Feuille d'épinard",   pos: 'left-5 sm:left-24 bottom-6 sm:bottom-10 w-11 sm:w-14 md:w-16',     anim: 'floaty-slow', rot: 12 },
-  { img: VEG.carrot,       alt: 'Carotte',             pos: 'hidden sm:block left-3 md:left-12 top-1/2 w-7 md:w-9',             anim: 'floaty-slow', rot: -16 },
-  { img: VEG.cherryTomato, alt: 'Tomate cerise',       pos: 'right-4 sm:right-16 top-6 sm:top-12 w-12 sm:w-14 md:w-16',         anim: 'floaty-slow', rot: 8 },
-  { img: VEG.onion,        alt: 'Oignon rouge',        pos: 'hidden sm:block right-6 md:right-14 top-24 md:top-28 w-16 md:w-20', anim: 'floaty',      rot: -7 },
-  { img: VEG.cabbage,      alt: 'Chou rouge',          pos: 'right-1 sm:right-10 bottom-5 sm:bottom-12 w-16 sm:w-24 md:w-28',   anim: 'floaty',      rot: 7 },
-];
-
 /* Infos de contact — À CONFIRMER par le client (placeholder). */
 const INFO = {
   name: 'Sara Pizzeraya Kebap',
@@ -290,18 +269,18 @@ function Hero() {
 
   return (
     <section id="accueil" className="relative overflow-hidden bg-sara-cream">
-      {/* bloc rouge : décor + titre */}
-      <div className="relative bg-sara-red pt-14 md:pt-20 pb-40 md:pb-56">
-        {/* décor flottant : vrais légumes détourés */}
-        {HERO_DECOR.map((d, i) => (
-          <span key={i} className={`pointer-events-none absolute ${d.pos} ${d.anim} select-none`} aria-hidden="true">
-            <img src={d.img} alt="" className="w-full h-auto drop-shadow-xl" style={{ transform: `rotate(${d.rot}deg)` }} loading="lazy" />
-          </span>
-        ))}
+      {/* bloc hero : photo de fond + titre */}
+      <div className="relative bg-sara-red pt-14 md:pt-20 pb-40 md:pb-56 overflow-hidden">
+        {/* photo de fond avec voile rouge pour garder le contraste du texte */}
+        <div className="absolute inset-0 z-0" aria-hidden="true">
+          <img src={IMG.hero} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-sara-red/75 mix-blend-multiply" />
+          <div className="absolute inset-0 bg-gradient-to-b from-sara-ink/50 via-sara-red/15 to-sara-red/45" />
+        </div>
 
         <div className="max-w-5xl mx-auto px-5 sm:px-8 text-center relative z-10">
           <p className="text-sara-creamSoft/90 font-medium tracking-wide mb-6">• Frais • Rapide • Savoureux</p>
-          <h1 className="heading text-white text-5xl sm:text-6xl md:text-7xl max-w-4xl mx-auto">
+          <h1 className="heading text-white text-5xl sm:text-6xl md:text-7xl max-w-4xl mx-auto drop-shadow-lg">
             Le goût qui donne<br />envie de revenir
           </h1>
         </div>
