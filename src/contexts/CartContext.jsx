@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { track } from '../lib/track.js';
 
 // Panier client, persisté en localStorage. Aucune UI ici — le composant
 // panier/drawer sera construit par-dessus ce hook.
@@ -33,6 +34,7 @@ export function CartProvider({ children }) {
   }, [items]);
 
   const addItem = (item) => {
+    track('cart'); // tracking patron : un visiteur a mis qqch au panier
     setItems((prev) => {
       const existing = prev.find((i) => sameLine(item, i));
       if (existing) {

@@ -230,9 +230,44 @@ Pizzas pour le détail de chaque mécanisme — ce fichier ne fait qu'indiquer o
 4. Ajouter les deux valeurs dans `.env`, relancer le serveur, tester via
    `POST /api/admin/telegram/test` avec `Authorization: Bearer <ADMIN_SECRET>`.
 
-### ⬜ Phase 5 — Dashboard patron
-Compte patron par email d'env (`BOSS_EMAIL`), stats dérivées d'`orders` +
-`analytics_events`, aucune nouvelle table de rôles.
+### 🟡 Phase 5 — Dashboard patron (backend fait/vérifié, UI pas construite, 2 août 2026)
+- **Migration `0004_analytics_events.sql`** : table `analytics_events(visitor_id, type, day)`,
+  PK composite — ⚠️ **pas encore exécutée**. Le dashboard fonctionne sans (CA/commandes/
+  historique corrects), seuls `visitors`/`carts`/`cartRate`/`orderRate` restent à 0 tant
+  qu'elle n'est pas appliquée (vérifié, voir plus bas — dégradation propre, pas un crash).
+- `server/db.ts` : `isBossEmail` (compare à `BOSS_EMAIL`, pas de colonne "role"),
+  `ensureBossAccount` (crée/resynchronise le compte patron au démarrage depuis
+  `BOSS_EMAIL`+`BOSS_PASSWORD` — mot de passe = source de vérité dans l'env, comme Flash),
+  `getActiveOrders`/`getRecentOrders` (jointure `users` pour le nom client), `getDashboardStats`
+  (période 1/7/30 jours, calcul en fuseau Europe/Zurich — voir avertissement fuseau dans le
+  code), `recordAnalyticsEvent`.
+- `server/api.ts` :
+  - `ensureBossAccount()` appelée une fois au montage de `setupApi()` (pas dans
+    `server/index.ts` : ça couvrirait la prod mais pas le dev via le plugin Vite — mettre la
+    logique de boot dans `setupApi()` la fait tourner dans les deux cas, un seul endroit).
+  - `/api/auth/login` et `GET /api/me` renvoient désormais `isAdmin`.
+  - `POST /api/track` (public, visiteur/panier).
+  - `/api/admin/*` : guard unique (Bearer `ADMIN_SECRET` **ou** cookie de session patron),
+    `GET orders` (actives), `GET stats?days=1|7|30`, `PATCH orders/:id/accept|extend|status`.
+  - `src/lib/track.js` (visitorId en localStorage, throttle 1×/jour/type côté client) branché
+    dans `main.jsx` (visite au montage) et `CartContext.addItem` (panier) — toujours pas d'UI.
+- **Vérifié réellement contre le vrai Supabase, scénario complet** (compte patron temporaire
+  `patron.test@example.com`, supprimé après coup) :
+  1. Démarrage serveur avec `BOSS_EMAIL`/`BOSS_PASSWORD` → compte créé automatiquement.
+  2. Login patron → `isAdmin: true` ; login client normal → pas de champ `isAdmin`.
+  3. `/api/admin/orders` : sans auth → 403 ; cookie patron → 200 ; Bearer `ADMIN_SECRET` → 200.
+  4. Commande créée → visible dans `/api/admin/orders` → **acceptée depuis le dashboard**
+     (`PATCH .../accept`, 30 min) → **+15 min** (`PATCH .../extend`, ETA à 45 correctement,
+     pas réinitialisée) → **marquée prête à la main** (`PATCH .../status`) → confirmé côté
+     suivi public.
+  5. `POST /api/track` (visit + cart) → `200 {"ok":true}`.
+  6. `GET /api/admin/stats?days=1` → CA/commandes/panier moyen corrects (`revenue: 9.5,
+     orders: 1, avgBasket: 9.5`), `visitors`/`carts` à 0 (table analytics pas encore migrée —
+     comportement voulu, pas un bug).
+  `npm run check` + `npm run build` ✅. Toutes les données de test nettoyées après coup.
+- **Pas construit** : aucune UI dashboard (tableau de bord visuel patron). Backend prêt à
+  être consommé ; à décider avec Ayoub qui la construit et quand (probablement après les
+  écrans client, moins urgent — un patron peut gérer ses commandes via `/manage` en attendant).
 
 ## Conventions héritées de Flash Pizzas (à respecter dès qu'applicable)
 - Statuts commande : `pending → confirmed → preparing → ready → delivered | cancelled`.

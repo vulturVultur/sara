@@ -340,3 +340,157 @@ export async function findOrderByPaymentIntent(pi: string): Promise<Order | unde
     .maybeSingle();
   return data ? rowToOrder(data) : undefined;
 }
+
+export type OrderWithCustomer = Order & { customerName: string };
+
+// Commandes qui demandent encore une action (à traiter ou en cours).
+export async function getActiveOrders(): Promise<OrderWithCustomer[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await sb()
+    .from("orders")
+    .select("*, users(prenom, nom)")
+    .in("status", ["pending", "confirmed", "preparing", "ready"])
+    .order("created_at", { ascending: false });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    ...rowToOrder(r),
+    customerName: r.users ? `${r.users.prenom ?? ""} ${r.users.nom ?? ""}`.trim() : (r.phone || "Client anonyme"),
+  }));
+}
+
+// Historique complet (toutes commandes confondues), pour le dashboard patron.
+export async function getRecentOrders(limit = 100): Promise<OrderWithCustomer[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await sb()
+    .from("orders")
+    .select("*, users(prenom, nom)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((r: any) => ({
+    ...rowToOrder(r),
+    customerName: r.users ? `${r.users.prenom ?? ""} ${r.users.nom ?? ""}`.trim() : (r.phone || "Client anonyme"),
+  }));
+}
+
+// ── Compte patron ────────────────────────────────────────────────────────────
+// Identifié par email (variable BOSS_EMAIL), pas de colonne "role" en base —
+// un seul compte patron, défini par l'environnement.
+export function isBossEmail(email: string | null | undefined): boolean {
+  const boss = (process.env.BOSS_EMAIL ?? "").trim().toLowerCase();
+  return boss.length > 0 && (email ?? "").trim().toLowerCase() === boss;
+}
+
+// Crée/synchronise le compte patron au démarrage depuis BOSS_EMAIL + BOSS_PASSWORD.
+// Le mot de passe = source de vérité dans l'env (re-synchronisé à chaque boot).
+export async function ensureBossAccount(): Promise<void> {
+  const email = (process.env.BOSS_EMAIL ?? "").trim().toLowerCase();
+  const password = process.env.BOSS_PASSWORD ?? "";
+  if (!email || !password) return;
+  const salt = generateId();
+  const passwordHash = `${salt}:${hashPassword(password, salt)}`;
+  const existing = await findUserByEmail(email);
+  if (!existing) {
+    await sb().from("users").insert({
+      id: generateId(), email,
+      password_hash: passwordHash,
+      prenom: "Patron", nom: "Sara",
+      phone: "", address: "", newsletter: false,
+      loyalty_count: 0, favorites: [],
+      email_verified: true, email_verif_token: null,
+    });
+    console.log("[Boss] Compte patron créé:", email);
+  } else {
+    await sb().from("users").update({ password_hash: passwordHash, email_verified: true }).eq("id", existing.id);
+    console.log("[Boss] Compte patron synchronisé:", email);
+  }
+}
+
+// ── Analytics (tracking maison) ──────────────────────────────────────────────
+// Table analytics_events(visitor_id, type, day) — un visiteur distinct compte
+// une fois par type et par jour (upsert ignore les doublons). Journées
+// découpées en heure suisse (Europe/Zurich), pas en UTC — un découpage UTC
+// décalerait les visites/commandes de fin de soirée sur le jour suivant.
+// ⚠️ Fuseau à confirmer si Sara n'est finalement pas basé en Suisse (les prix
+// affichés sont en CHF, d'où ce choix par défaut — voir placeholders INFO).
+const TZ = "Europe/Zurich";
+
+function zurichDayStr(d = new Date()): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: TZ }).format(d); // sv-SE = format ISO
+}
+
+function zurichOffsetMs(d: Date): number {
+  const asZurich = new Date(d.toLocaleString("en-US", { timeZone: TZ }));
+  const asUtc = new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
+  return asZurich.getTime() - asUtc.getTime();
+}
+
+function zurichStartOfDayIso(daysBack = 0): string {
+  const ref = new Date(Date.now() - daysBack * 86_400_000);
+  const midnightUtc = Date.parse(`${zurichDayStr(ref)}T00:00:00Z`);
+  return new Date(midnightUtc - zurichOffsetMs(ref)).toISOString();
+}
+
+export async function recordAnalyticsEvent(type: "visit" | "cart", visitorId: string): Promise<void> {
+  await sb().from("analytics_events").upsert(
+    { visitor_id: visitorId, type, day: zurichDayStr() },
+    { onConflict: "visitor_id,type,day", ignoreDuplicates: true },
+  );
+}
+
+export type DashboardStats = {
+  periodDays: number;
+  revenue: number;
+  orders: number;
+  cancelled: number;
+  avgBasket: number;
+  emporter: number;
+  livraison: number;
+  visitors: number;
+  carts: number;
+  cartRate: number;
+  orderRate: number;
+  ordersTotal: number;
+};
+
+// periodDays : 1 = aujourd'hui, 7 = 7 derniers jours (aujourd'hui inclus), 30 = idem.
+export async function getDashboardStats(periodDays = 1): Promise<DashboardStats> {
+  const days = [1, 7, 30].includes(periodDays) ? periodDays : 1;
+  const sinceIso = zurichStartOfDayIso(days - 1);
+  const sinceDay = zurichDayStr(new Date(Date.now() - (days - 1) * 86_400_000));
+
+  const countEv = async (type: string) => {
+    const { count } = await sb().from("analytics_events").select("*", { count: "exact", head: true }).eq("type", type).gte("day", sinceDay);
+    return count ?? 0;
+  };
+
+  const [visitors, carts, ordersHead, periodRes] = await Promise.all([
+    countEv("visit"),
+    countEv("cart"),
+    sb().from("orders").select("*", { count: "exact", head: true }),
+    sb().from("orders").select("total, status, order_type").gte("created_at", sinceIso),
+  ]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (periodRes.data ?? []) as any[];
+  // Une commande annulée n'a rien encaissé : elle sort du CA, du panier moyen
+  // et de la répartition emporter/livraison, mais reste comptée à part.
+  const kept = rows.filter((o) => o.status !== "cancelled");
+  const revenue = kept.reduce((s, o) => s + Number(o.total), 0);
+  const pct = (n: number) => (visitors > 0 ? Math.round((n / visitors) * 1000) / 10 : 0);
+
+  return {
+    periodDays: days,
+    revenue,
+    orders: kept.length,
+    cancelled: rows.length - kept.length,
+    avgBasket: kept.length > 0 ? revenue / kept.length : 0,
+    emporter: kept.filter((o) => o.order_type === "emporter").length,
+    livraison: kept.filter((o) => o.order_type === "livraison").length,
+    visitors,
+    carts,
+    cartRate: pct(carts),
+    orderRate: pct(kept.length),
+    ordersTotal: ordersHead.count ?? 0,
+  };
+}

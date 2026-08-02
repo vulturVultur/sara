@@ -12,8 +12,9 @@ import {
   pingDb, findUserByEmail, findUserById, createUser, updateUser, updatePassword,
   verifyPassword, toggleFavorite, safeUser, createSession, findSession,
   deleteSession, deleteUserSessions, createOrder, getUserOrders, findOrderByPaymentIntent,
-  findOrderById, updateOrderStatus, acceptOrder, cancelOrderByClient,
-  type Order,
+  findOrderById, updateOrderStatus, acceptOrder, extendPrepTime, cancelOrderByClient,
+  isBossEmail, ensureBossAccount, getActiveOrders, getRecentOrders, getDashboardStats,
+  recordAnalyticsEvent, type Order,
 } from "./db.js";
 
 let _stripe: Stripe | null = null;
@@ -340,7 +341,18 @@ function validateTotal(raw: unknown): number | null {
 
 type Body = Record<string, unknown>;
 
+// Comparaison à temps constant (anti timing-attack) pour un secret admin.
+function safeEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
 export function setupApi(app: App) {
+  // Compte patron : créé/synchronisé une fois au montage (dev via le plugin
+  // Vite, prod via server/index.ts — un seul point d'entrée dans les deux cas).
+  ensureBossAccount().catch((e) => console.error("[Boss] ensureBossAccount:", e));
+
   app.use(async (req, res, next) => {
     const url = (req.url ?? "").split("?")[0];
     const method = req.method?.toUpperCase() ?? "GET";
@@ -492,7 +504,7 @@ export function setupApi(app: App) {
         if (!user || !verifyPassword(user, password)) { err(res, 401, "Email ou mot de passe incorrect"); return; }
         const t = await createSession(user.id);
         setAuthCookie(res, t);
-        ok(res, { user: safeUser(user) });
+        ok(res, { user: { ...safeUser(user), isAdmin: isBossEmail(user.email) } });
         return;
       }
 
@@ -507,7 +519,7 @@ export function setupApi(app: App) {
 
       if (method === "GET" && url === "/api/me") {
         const auth = await requireAuth(); if (!auth) return;
-        ok(res, safeUser(auth.user));
+        ok(res, { ...safeUser(auth.user), isAdmin: isBossEmail(auth.user.email) });
         return;
       }
 
@@ -767,16 +779,96 @@ export function setupApi(app: App) {
         return;
       }
 
-      // ── Test notification Telegram (sans créer de commande) ──
-      if (method === "POST" && url === "/api/admin/telegram/test") {
+      // ── Tracking analytics (public) : visite + ajout panier ──
+      if (method === "POST" && url === "/api/track") {
+        if (!rateLimit("track", req, 120, 60_000)) { ok(res, { ok: true }); return; }
+        const type = body.type === "visit" || body.type === "cart" ? body.type : null;
+        const visitorId = typeof body.visitorId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(body.visitorId) ? body.visitorId : null;
+        if (type && visitorId) {
+          try { await recordAnalyticsEvent(type, visitorId); } catch { /* silencieux */ }
+        }
+        ok(res, { ok: true });
+        return;
+      }
+
+      // ── Admin (dashboard patron) ──
+      // Accès : Bearer ADMIN_SECRET (outil externe) OU cookie de session d'un
+      // compte patron connecté (BOSS_EMAIL) → dashboard web.
+      if (url.startsWith("/api/admin/")) {
         const secret = process.env.ADMIN_SECRET;
         const authHeader = req.headers.authorization ?? "";
         const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-        if (!secret || !provided || provided !== secret) { err(res, 403, "Non autorisé"); return; }
-        const stamp = new Date().toLocaleString("fr-CH", { timeZone: "Europe/Zurich" });
-        const result = await sendBossTelegram(`✅ Test Sara — notifications Telegram opérationnelles.\n🕒 ${stamp}`);
-        if (result.ok) ok(res, { ok: true });
-        else err(res, 502, `Échec Telegram : ${result.error ?? "inconnu"}`);
+        const secretOk = !!secret && !!provided && safeEqual(provided, secret);
+        let bossOk = false;
+        if (!secretOk && token) {
+          const session = await findSession(token);
+          if (session) {
+            const u = await findUserById(session.userId);
+            if (u && isBossEmail(u.email)) bossOk = true;
+          }
+        }
+        if (!secretOk && !bossOk) { err(res, 403, "Non autorisé"); return; }
+
+        if (method === "POST" && url === "/api/admin/telegram/test") {
+          const stamp = new Date().toLocaleString("fr-CH", { timeZone: "Europe/Zurich" });
+          const result = await sendBossTelegram(`✅ Test Sara — notifications Telegram opérationnelles.\n🕒 ${stamp}`);
+          if (result.ok) ok(res, { ok: true });
+          else err(res, 502, `Échec Telegram : ${result.error ?? "inconnu"}`);
+          return;
+        }
+
+        if (method === "GET" && url === "/api/admin/orders") {
+          ok(res, await getActiveOrders());
+          return;
+        }
+
+        // Dashboard : stats de la période + historique complet.
+        if (method === "GET" && url === "/api/admin/stats") {
+          const daysParam = Number(new URL(req.url ?? "", "http://x").searchParams.get("days"));
+          const [stats, recentOrders] = await Promise.all([getDashboardStats(daysParam || 1), getRecentOrders(100)]);
+          ok(res, { stats, recentOrders });
+          return;
+        }
+
+        if (method === "PATCH" && /^\/api\/admin\/orders\/[a-f0-9]+\/accept$/.test(url)) {
+          const orderId = url.split("/")[4];
+          const etaRaw = Number(body.etaMinutes);
+          const etaMinutes = [15, 30, 45, 60].includes(etaRaw) ? etaRaw : null;
+          if (etaMinutes === null) { err(res, 400, "Délai invalide (15, 30, 45 ou 60)"); return; }
+          const existing = await findOrderById(orderId);
+          if (!existing) { err(res, 404, "Commande introuvable"); return; }
+          const accepted = await acceptOrder(orderId, etaMinutes);
+          if (!accepted) { err(res, 404, "Commande introuvable ou déjà décidée"); return; }
+          await captureOrderPayment(existing.paymentIntent);
+          ok(res, accepted);
+          return;
+        }
+
+        if (method === "PATCH" && /^\/api\/admin\/orders\/[a-f0-9]+\/extend$/.test(url)) {
+          const orderId = url.split("/")[4];
+          const addMinutes = Number(body.addMinutes);
+          if (!Number.isInteger(addMinutes) || addMinutes <= 0 || addMinutes > 120) { err(res, 400, "addMinutes invalide"); return; }
+          const extended = await extendPrepTime(orderId, addMinutes);
+          if (!extended) { err(res, 404, "Commande introuvable ou pas en préparation"); return; }
+          ok(res, extended);
+          return;
+        }
+
+        // Changement de statut manuel (refuser, marquer prête/livrée à la main).
+        if (method === "PATCH" && /^\/api\/admin\/orders\/[a-f0-9]+\/status$/.test(url)) {
+          const orderId = url.split("/")[4];
+          const status = body.status;
+          const validStatuses: Order["status"][] = ["pending", "confirmed", "preparing", "ready", "delivered", "cancelled"];
+          if (typeof status !== "string" || !validStatuses.includes(status as Order["status"])) { err(res, 400, "Statut invalide"); return; }
+          const existing = status === "cancelled" ? await findOrderById(orderId) : null;
+          const updated = await updateOrderStatus(orderId, status as Order["status"]);
+          if (!updated) { err(res, 404, "Commande introuvable"); return; }
+          if (status === "cancelled") await cancelOrderPayment(existing?.paymentIntent);
+          ok(res, updated);
+          return;
+        }
+
+        next();
         return;
       }
 
