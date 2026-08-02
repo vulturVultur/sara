@@ -7,11 +7,23 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
+import Stripe from "stripe";
 import {
   pingDb, findUserByEmail, findUserById, createUser, updateUser, updatePassword,
   verifyPassword, toggleFavorite, safeUser, createSession, findSession,
-  deleteSession, deleteUserSessions,
+  deleteSession, deleteUserSessions, createOrder, getUserOrders, findOrderByPaymentIntent,
+  type Order,
 } from "./db.js";
+
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (_stripe) return _stripe;
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY manquante");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _stripe = new Stripe(key, { apiVersion: "2026-04-22.dahlia" as any });
+  return _stripe;
+}
 
 type Req = IncomingMessage & { body?: unknown };
 type Res = ServerResponse;
@@ -42,6 +54,22 @@ async function parseBody(req: IncomingMessage): Promise<unknown> {
     });
     req.on("end", () => { try { resolve(JSON.parse(data)); } catch { resolve({}); } });
     req.on("error", () => resolve({}));
+  });
+}
+
+// Corps brut (non parsé) — requis par la vérification de signature Stripe,
+// qui doit s'appliquer sur les octets exacts envoyés, pas sur du JSON reparsé.
+async function parseRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) { req.destroy(); reject(new Error("Corps trop volumineux")); return; }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
   });
 }
 
@@ -135,6 +163,40 @@ function optString(v: unknown, maxLen: number): string {
   return v.trim().slice(0, maxLen);
 }
 
+// ── Validation des commandes ───────────────────────────────────────────────────
+
+const MAX_ITEMS = 60;
+const MAX_QTY = 50;
+const MAX_UNIT_PRICE = 1000;
+const MAX_TOTAL = 10000;
+
+// Valide le tableau d'articles d'une commande : structure + bornes. Le total
+// n'est PAS recalculé à partir des lignes (le client peut appliquer des
+// remises légitimes) — voir validateTotal, borné indépendamment.
+function validateItems(raw: unknown): Order["items"] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_ITEMS) return null;
+  const out: Order["items"] = [];
+  for (const it of raw) {
+    if (!it || typeof it !== "object") return null;
+    const r = it as Record<string, unknown>;
+    const name = typeof r.name === "string" ? r.name.trim() : "";
+    if (!name || name.length > 120) return null;
+    const quantity = Number(r.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QTY) return null;
+    const price = Number(r.price);
+    if (!Number.isFinite(price) || price < 0 || price > MAX_UNIT_PRICE) return null;
+    const desc = typeof r.desc === "string" ? r.desc.slice(0, 500) : undefined;
+    out.push({ name, quantity, price, ...(desc ? { desc } : {}) });
+  }
+  return out;
+}
+
+function validateTotal(raw: unknown): number | null {
+  const total = Number(raw);
+  if (!Number.isFinite(total) || total < 0 || total > MAX_TOTAL) return null;
+  return total;
+}
+
 type Body = Record<string, unknown>;
 
 export function setupApi(app: App) {
@@ -143,6 +205,78 @@ export function setupApi(app: App) {
     const method = req.method?.toUpperCase() ?? "GET";
 
     if (!url.startsWith("/api/")) { next(); return; }
+
+    // ── Webhook Stripe (corps brut requis avant tout parsing JSON) ──
+    if (method === "POST" && url === "/api/stripe/webhook") {
+      try {
+        const rawBody = await parseRawBody(req);
+        const sig = req.headers["stripe-signature"] as string;
+        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        if (!webhookSecret) { err(res, 500, "STRIPE_WEBHOOK_SECRET manquante"); return; }
+
+        let event: Stripe.Event;
+        try {
+          event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSecret);
+        } catch (e) {
+          console.error("[Stripe] Signature webhook invalide:", e);
+          err(res, 400, "Signature webhook invalide");
+          return;
+        }
+
+        if (event.type === "checkout.session.completed") {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const meta = session.metadata ?? {};
+          const paymentIntent = typeof session.payment_intent === "string" ? session.payment_intent : null;
+
+          // Idempotence : Stripe relivre l'événement (au moins une fois, + relances
+          // si la réponse tarde). Si une commande existe déjà pour ce PaymentIntent,
+          // on ne recrée rien — sinon commande en double. On répond 200 dans tous
+          // les cas pour que Stripe arrête de relancer.
+          if (paymentIntent) {
+            const existing = await findOrderByPaymentIntent(paymentIntent);
+            if (existing) {
+              console.log(`[Stripe] Webhook déjà traité (PI=${paymentIntent}, commande ${existing.id}) — ignoré`);
+              ok(res, { received: true, duplicate: true });
+              return;
+            }
+          }
+
+          const itemsJson = Object.keys(meta)
+            .filter((k) => k.startsWith("items_"))
+            .sort((a, b) => parseInt(a.slice(6)) - parseInt(b.slice(6)))
+            .map((k) => meta[k])
+            .join("");
+          let items: Order["items"] = [];
+          try {
+            const parsed = JSON.parse(itemsJson || "[]") as Array<{ q: number; n: string; p: number; d?: string }>;
+            items = parsed.map((i) => ({ name: i.n, quantity: i.q, price: i.p, ...(i.d ? { desc: i.d } : {}) }));
+          } catch (e) {
+            console.error("[Stripe] items metadata invalide:", e);
+          }
+
+          // Capture manuelle : la carte est seulement AUTORISÉE (argent réservé),
+          // pas encore débitée. La commande reste "pending" — l'encaissement
+          // (capture) et son annulation arrivent en Phase 4 avec accepter/refuser.
+          const order = await createOrder({
+            userId: meta.userId || null,
+            items,
+            total: parseFloat(meta.total ?? "0"),
+            orderType: (meta.orderType as "emporter" | "livraison") || "emporter",
+            address: meta.address || "",
+            phone: meta.phone || "",
+            paymentIntent,
+          });
+
+          console.log(`[Stripe] Commande carte autorisée (pending) via webhook: ${order.id} PI=${paymentIntent}`);
+        }
+
+        ok(res, { received: true });
+      } catch (e) {
+        console.error("[API] Erreur webhook Stripe:", e);
+        err(res, 500, "Erreur serveur");
+      }
+      return;
+    }
 
     if (["POST", "PUT", "PATCH"].includes(method)) {
       if (!req.body) req.body = await parseBody(req);
@@ -257,6 +391,127 @@ export function setupApi(app: App) {
         if (!itemId) { err(res, 400, "id du produit requis"); return; }
         const favorites = await toggleFavorite(auth.user.id, itemId);
         ok(res, { favorites });
+        return;
+      }
+
+      // ── Commandes ──
+
+      if (method === "GET" && url === "/api/me/orders") {
+        const auth = await requireAuth(); if (!auth) return;
+        ok(res, await getUserOrders(auth.user.id));
+        return;
+      }
+
+      // Paiement cash/sur place : crée la commande directement (statut "pending").
+      // Compte optionnel — checkout invité si prénom/nom/téléphone fournis.
+      if (method === "POST" && url === "/api/orders") {
+        if (!rateLimit("orders", req, 12, 5 * 60_000)) { tooMany(res); return; }
+        const orderItems = validateItems(body.items);
+        const total = validateTotal(body.total);
+        if (!orderItems || total === null || (body.orderType !== "emporter" && body.orderType !== "livraison")) {
+          err(res, 400, "Données de commande invalides"); return;
+        }
+        const orderType: "emporter" | "livraison" = body.orderType === "livraison" ? "livraison" : "emporter";
+        const phone = optString(body.phone, 40);
+        const address = optString(body.address, 300);
+        let userId: string | null = null;
+        let customerName = [optString(body.prenom, 80), optString(body.nom, 80)].filter(Boolean).join(" ").trim() || "Client invité";
+        if (token) {
+          const session = await findSession(token);
+          if (session) {
+            const user = await findUserById(session.userId);
+            if (user) { userId = user.id; customerName = `${user.prenom} ${user.nom}`; }
+          }
+        }
+        const order = await createOrder({ userId, items: orderItems, total, orderType, address, phone });
+
+        const itemsLog = orderItems.map((i) => `${i.quantity}x ${i.name}${i.desc ? ` [${i.desc}]` : ""}`).join(", ");
+        console.log("──────────────────────────────────────────");
+        console.log(`Nouvelle commande Sara — ${order.id}`);
+        console.log(`Client    : ${customerName}`);
+        console.log(`Type      : ${order.orderType === "livraison" ? "Livraison" : "À emporter"}`);
+        if (order.address) console.log(`Adresse   : ${order.address}`);
+        if (order.phone) console.log(`Téléphone : ${order.phone}`);
+        console.log(`Articles  : ${itemsLog}`);
+        console.log(`Total     : CHF ${order.total.toFixed(2)}`);
+        console.log("──────────────────────────────────────────");
+        // ⚠️ Pas encore de notification patron (Telegram/etc.) — Phase 4. Pour
+        // l'instant une commande "pending" n'avance que par une action manuelle
+        // en base tant que la Phase 4 (accepter/refuser) n'est pas construite.
+
+        ok(res, { id: order.id, status: order.status });
+        return;
+      }
+
+      // Paiement carte : crée une session Stripe Embedded Checkout, capture
+      // manuelle (argent AUTORISÉ, pas débité — capturé seulement à
+      // l'acceptation, en Phase 4). La commande elle-même est créée par le
+      // webhook une fois le paiement confirmé, pas ici.
+      if (method === "POST" && url === "/api/stripe/create-checkout") {
+        if (!rateLimit("checkout", req, 12, 5 * 60_000)) { tooMany(res); return; }
+        const orderItems = validateItems(body.items);
+        const total = validateTotal(body.total);
+        if (!orderItems || total === null) { err(res, 400, "Données de commande invalides"); return; }
+
+        let userId: string | null = null;
+        let customerName = "Client";
+        if (token) {
+          const session = await findSession(token);
+          if (session) {
+            const user = await findUserById(session.userId);
+            if (user) { userId = user.id; customerName = `${user.prenom} ${user.nom}`; }
+          }
+        }
+
+        const baseUrl = process.env.BASE_URL ?? "http://localhost:3000";
+        const lineItems = orderItems.map((i) => ({
+          price_data: { currency: "chf", product_data: { name: i.name }, unit_amount: Math.round(i.price * 100) },
+          quantity: i.quantity,
+        }));
+
+        // Sérialisation JSON des articles (avec desc = personnalisation) répartie
+        // sur plusieurs clés metadata Stripe (limite : 500 car./clé, 50 clés max).
+        const ITEMS_META_CHUNK = 490;
+        const ITEMS_META_BUDGET = 40;
+        const buildItemsChunks = (withDesc: boolean): string[] => {
+          const json = JSON.stringify(orderItems.map((i) => ({ q: i.quantity, n: i.name, p: i.price, ...(withDesc && i.desc ? { d: i.desc } : {}) })));
+          const chunks: string[] = [];
+          for (let pos = 0; pos < json.length; pos += ITEMS_META_CHUNK) chunks.push(json.slice(pos, pos + ITEMS_META_CHUNK));
+          return chunks;
+        };
+        let itemsChunks = buildItemsChunks(true);
+        if (itemsChunks.length > ITEMS_META_BUDGET) itemsChunks = buildItemsChunks(false);
+        const itemsMeta: Record<string, string> = {};
+        itemsChunks.forEach((c, i) => { itemsMeta[`items_${i}`] = c; });
+
+        const stripeSession = await getStripe().checkout.sessions.create({
+          ui_mode: "embedded_page",
+          payment_method_types: ["card"],
+          payment_intent_data: { capture_method: "manual" },
+          line_items: lineItems,
+          mode: "payment",
+          return_url: `${baseUrl}/?stripe_return={CHECKOUT_SESSION_ID}`,
+          metadata: {
+            orderType: body.orderType === "livraison" ? "livraison" : "emporter",
+            address: optString(body.address, 300),
+            phone: optString(body.phone, 40),
+            userId: userId || "",
+            customerName: customerName.slice(0, 120),
+            ...itemsMeta,
+            total: String(total),
+          },
+        });
+
+        ok(res, { clientSecret: stripeSession.client_secret });
+        return;
+      }
+
+      if (method === "GET" && url === "/api/stripe/session-status") {
+        if (!rateLimit("checkout", req, 30, 5 * 60_000)) { tooMany(res); return; }
+        const sessionId = new URL(req.url ?? "", "http://x").searchParams.get("session_id") ?? "";
+        if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId)) { err(res, 400, "session_id invalide"); return; }
+        const s = await getStripe().checkout.sessions.retrieve(sessionId);
+        ok(res, { status: s.status, paymentStatus: s.payment_status });
         return;
       }
 

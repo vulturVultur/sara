@@ -56,6 +56,55 @@ export function CartProvider({ children }) {
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
 
+  // Paiement cash/sur place — commande créée directement (statut "pending").
+  // Compte optionnel : fonctionne aussi en checkout invité (prenom/nom/telephone).
+  const placeOrder = async ({ orderType, address, phone, prenom, nom }) => {
+    const r = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price, desc: i.desc })),
+        total,
+        orderType,
+        address,
+        phone,
+        prenom,
+        nom,
+      }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({ error: 'Erreur inconnue' }));
+      throw new Error(body.error ?? 'Commande refusée');
+    }
+    const result = await r.json();
+    clearCart();
+    return result; // { id, status }
+  };
+
+  // Paiement carte — crée une session Stripe Embedded Checkout et renvoie le
+  // clientSecret. Ne vide PAS le panier ici : c'est fait après confirmation
+  // réelle du paiement (écran de retour Stripe), pas avant.
+  const createStripeCheckout = async ({ orderType, address, phone }) => {
+    const r = await fetch('/api/stripe/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price, desc: i.desc })),
+        total,
+        orderType,
+        address,
+        phone,
+      }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({ error: 'Erreur inconnue' }));
+      throw new Error(body.error ?? 'Impossible de créer le paiement');
+    }
+    return r.json(); // { clientSecret }
+  };
+
   return (
     <CartContext.Provider
       value={{
@@ -69,6 +118,8 @@ export function CartProvider({ children }) {
         isCartOpen,
         openCart: () => setIsCartOpen(true),
         closeCart: () => setIsCartOpen(false),
+        placeOrder,
+        createStripeCheckout,
       }}
     >
       {children}

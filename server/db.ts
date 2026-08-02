@@ -193,3 +193,73 @@ export async function deleteSession(token: string): Promise<void> {
 export async function deleteUserSessions(userId: string): Promise<void> {
   await sb().from("sessions").delete().eq("user_id", userId);
 }
+
+// ── Orders ─────────────────────────────────────────────────────────────────────
+
+export type OrderItem = { name: string; quantity: number; price: number; desc?: string };
+
+export type Order = {
+  id: string;
+  userId: string | null;
+  items: OrderItem[];
+  total: number;
+  orderType: "emporter" | "livraison";
+  address: string;
+  phone: string;
+  status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled";
+  createdAt: string;
+  paymentIntent: string | null;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToOrder(r: any): Order {
+  return {
+    id: r.id,
+    userId: r.user_id ?? null,
+    items: r.items,
+    total: Number(r.total),
+    orderType: r.order_type,
+    address: r.address ?? "",
+    phone: r.phone ?? "",
+    status: r.status,
+    createdAt: r.created_at,
+    paymentIntent: r.payment_intent ?? null,
+  };
+}
+
+export async function createOrder(
+  data: Omit<Order, "id" | "createdAt" | "status" | "paymentIntent"> & { status?: Order["status"]; paymentIntent?: string | null }
+): Promise<Order> {
+  const row: Record<string, unknown> = {
+    id: generateId(),
+    user_id: data.userId,
+    items: data.items,
+    total: data.total,
+    order_type: data.orderType,
+    address: data.address,
+    phone: data.phone,
+    status: data.status ?? "pending",
+  };
+  if (data.paymentIntent) row.payment_intent = data.paymentIntent;
+  const { data: inserted, error } = await sb().from("orders").insert(row).select().single();
+  if (error) throw new Error(error.message);
+  return rowToOrder(inserted);
+}
+
+export async function getUserOrders(userId: string): Promise<Order[]> {
+  const { data } = await sb().from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+  return (data ?? []).map(rowToOrder);
+}
+
+// Retrouve la commande créée pour un PaymentIntent Stripe — utilisé par le
+// webhook pour l'idempotence (Stripe relivre parfois le même événement).
+export async function findOrderByPaymentIntent(pi: string): Promise<Order | undefined> {
+  const { data } = await sb()
+    .from("orders")
+    .select("*")
+    .eq("payment_intent", pi)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? rowToOrder(data) : undefined;
+}

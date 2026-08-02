@@ -120,8 +120,41 @@ Pizzas pour le détail de chaque mécanisme — ce fichier ne fait qu'indiquer o
   périmètre du collègue frontend. Checkout invité pas testable avant la Phase 3
   (`POST /api/orders` n'existe pas encore, `user_id` nullable déjà prévu dans le schéma).
 
-### ⬜ Phase 3 — Commande + paiement
-`POST /api/orders`, Stripe Embedded Checkout en capture manuelle, webhook idempotent.
+### 🟡 Phase 3 — Commande + paiement (partiellement fait/vérifié, 2 août 2026)
+- **Migration `0002_orders_payment_intent.sql`** : ajoute `orders.payment_intent` (nullable) —
+  ⚠️ action manuelle requise, pas encore exécutée par Ayoub au moment d'écrire ceci.
+- `server/db.ts` : `Order`/`OrderItem`, `createOrder`, `getUserOrders`, `findOrderByPaymentIntent`.
+- `server/api.ts` :
+  - `POST /api/orders` — paiement cash/sur place, crée la commande direct en `pending`.
+    Checkout invité si prénom/nom/téléphone fournis sans compte. Validation stricte
+    (`validateItems`/`validateTotal`, mêmes bornes que Flash : 60 articles max, qty 1-50,
+    prix 0-1000, total 0-10000).
+  - `GET /api/me/orders` — historique, requiert compte.
+  - `POST /api/stripe/create-checkout` — Embedded Checkout, **capture manuelle**
+    (`capture_method: "manual"`) : la carte n'est qu'**autorisée** au checkout, jamais
+    débitée à ce stade. `GET /api/stripe/session-status`.
+  - `POST /api/stripe/webhook` — `checkout.session.completed` crée la commande (`pending`),
+    idempotent par `payment_intent` (Stripe relivre parfois le même événement).
+  - ⚠️ **Capture/annulation du paiement pas encore câblées** (`captureOrderPayment`/
+    `cancelOrderPayment` façon Flash) — normal, ça n'a de sens qu'avec un accepter/refuser,
+    qui arrive en Phase 4. Jusque-là, une autorisation carte reste "en attente" côté Stripe
+    (auto-annulée par Stripe au bout de 7 jours si jamais capturée — filet de sécurité
+    intégré à Stripe, pas quelque chose qu'on a codé).
+- `src/contexts/CartContext.jsx` : `placeOrder()` (cash, vide le panier après succès) et
+  `createStripeCheckout()` (renvoie `clientSecret`, ne vide PAS le panier — ça doit attendre
+  la confirmation réelle du paiement). Toujours pas d'UI — la page de paiement embarquée
+  Stripe (`@stripe/react-stripe-js`) reste à construire par le collègue frontend, ces deux
+  fonctions sont ce sur quoi il pourra s'appuyer.
+- **Vérifié réellement contre le vrai Supabase (chemin cash uniquement)** : commande refusée
+  si `orderType` invalide (400), commande créée en connecté (`desc` de personnalisation
+  préservé), commande créée en invité (sans cookie), `/api/me/orders` ne renvoie que les
+  commandes du compte connecté (la commande invité n'y apparaît pas — comportement voulu).
+  `npm run check` + `npm run build` ✅. Données de test nettoyées après coup.
+- ⚠️ **Chemin carte (Stripe) écrit mais PAS vérifié** : aucune clé Stripe n'est configurée
+  (`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` absentes de `.env`). Le code compile et suit
+  fidèlement le pattern Flash, mais n'a pas tourné une seule fois contre l'API Stripe — pas
+  de simulation de "ça devrait marcher" ici, juste un fait : **reste à tester dès que les
+  clés de test sont disponibles**, avant de considérer la Phase 3 vraiment terminée.
 
 ### ⬜ Phase 4 — Suivi de commande + notif patron
 Statut dérivé de `eta_ready_at` (jamais de `setTimeout` — survit aux redémarrages), lien de
