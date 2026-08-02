@@ -310,33 +310,37 @@ function Categories() {
 /*  Special Offers                                                     */
 /* ------------------------------------------------------------------ */
 
-function OfferCard({ offer, large = false }) {
+function OfferBanner({ offer }) {
   const themes = {
-    orange: 'from-sara-orange to-[#E8890B] text-white',
+    orange: 'bg-gradient-to-br from-sara-orange to-[#E8890B] text-white',
     red: 'bg-sara-red text-white',
     green: 'bg-sara-green text-white',
   };
-  const bg = offer.theme === 'orange' ? `bg-gradient-to-br ${themes.orange}` : themes[offer.theme];
   return (
-    <div className={`relative overflow-hidden rounded-3xl ${bg} ${large ? 'p-8 min-h-[26rem]' : 'p-7 min-h-[13rem]'} flex flex-col`}>
-      {/* image (arrière-plan) */}
-      <div className={`absolute z-0 pointer-events-none ${large ? 'right-0 -bottom-4 w-1/2' : 'right-1 -bottom-2 w-2/5'}`}>
-        <Img src={offer.image} emoji={offer.emoji} alt={offer.title} className="w-full h-full object-contain drop-shadow-2xl" />
-      </div>
-      {/* pastille remise */}
-      <div className="sara-starburst absolute z-20 top-6 right-6 w-24 h-24 bg-white text-sara-brown flex flex-col items-center justify-center text-center">
-        <span className="text-[10px] font-semibold leading-none">Jusqu'à</span>
-        <span className="font-display text-2xl leading-none mt-0.5">{offer.save}</span>
-      </div>
-      {/* contenu (au-dessus) */}
-      <div className="relative z-10 flex flex-col flex-1">
-        <p className="text-white/85 font-medium mb-2">{offer.tag}</p>
-        <h3 className={`heading text-2xl sm:text-3xl leading-tight ${large ? 'max-w-[55%]' : 'max-w-[62%]'}`}>
+    <div className={`relative overflow-hidden rounded-3xl ${themes[offer.theme]} flex items-stretch min-h-[9.5rem] sm:min-h-[10.5rem]`}>
+      {/* contenu à gauche */}
+      <div className="relative z-10 flex-1 flex flex-col justify-center p-5 sm:p-7 pr-32 sm:pr-44">
+        <p className="text-white/85 text-xs sm:text-sm font-medium">{offer.tag}</p>
+        <h3 className="heading text-lg sm:text-2xl leading-tight mt-1">
           {offer.title}<br />{offer.subtitle}
         </h3>
-        <div className="mt-auto pt-6">
-          <PillLink href="#menu" variant="cream"><Flame className="w-4 h-4 text-sara-orange" /> Commander</PillLink>
+        <div className="mt-3">
+          <a href="#menu" className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl rounded-tr-none bg-white text-sara-red text-sm font-semibold hover:bg-sara-creamSoft transition">
+            <Flame className="w-4 h-4 text-sara-orange" /> Commander
+            <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+          </a>
         </div>
+      </div>
+
+      {/* image à droite */}
+      <div className="absolute right-0 top-0 h-full w-28 sm:w-52 pointer-events-none">
+        <Img src={offer.image} emoji={offer.emoji} alt={offer.title} className="w-full h-full object-cover" />
+      </div>
+
+      {/* pastille remise */}
+      <div className="sara-starburst absolute z-20 top-3 right-3 w-16 h-16 sm:w-20 sm:h-20 bg-white text-sara-brown flex flex-col items-center justify-center text-center">
+        <span className="text-[9px] sm:text-[10px] font-semibold leading-none">Jusqu'à</span>
+        <span className="font-display text-lg sm:text-2xl leading-none mt-0.5">{offer.save}</span>
       </div>
     </div>
   );
@@ -354,12 +358,10 @@ function SpecialOffers() {
         </p>
       </div>
 
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 grid md:grid-cols-2 gap-6">
-        <div className="grid gap-6">
-          <Reveal><OfferCard offer={OFFERS[0]} /></Reveal>
-          <Reveal delay={100}><OfferCard offer={OFFERS[1]} /></Reveal>
-        </div>
-        <Reveal delay={150}><OfferCard offer={OFFERS[2]} large /></Reveal>
+      <div className="max-w-4xl mx-auto px-5 sm:px-8 space-y-4 sm:space-y-5">
+        {OFFERS.map((o, i) => (
+          <Reveal key={o.title} delay={i * 100}><OfferBanner offer={o} /></Reveal>
+        ))}
       </div>
 
       {/* vague de raccord vers la section Chicha (fond sombre) */}
