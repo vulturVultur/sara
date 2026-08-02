@@ -1,9 +1,18 @@
 # Sara — Guide pour Claude
 
 ## Présentation
-Site vitrine + (à terme) commande en ligne pour **Sara Pizzeraya Kebap**. Repo GitHub :
-https://github.com/vulturVultur/sara.git. Projet Click ON, dossier local :
+Site vitrine + commande en ligne pour **Sara Pizzeraya Kebap**. Repo GitHub :
+https://github.com/vulturVultur/sara.git (compte propriétaire : `vulturVultur`, écriture
+accordée à `yehayojassas`). Projet Click ON, dossier local :
 `C:\Users\Ayoub\Desktop\All\Business\Sara`.
+
+## ⚠️ En ligne depuis le 2 août 2026
+**https://sara-sd8o.onrender.com** — déployé sur Render (Blueprint `render.yaml`), backend
+vérifié en conditions réelles de prod (auth, `/api/health`, webhook Stripe avec la vraie
+`whsec_...` — voir Phase 3). Vercel (`sara-rust-gamma.vercel.app`) reste connecté au même repo
+mais sert l'ancienne vitrine statique sans backend — **abandonné au profit de Render**, son
+`vercel.json` n'a pas été corrigé et son prochain build automatique échouera probablement
+(sans conséquence, ce n'est plus le déploiement cible).
 
 ## Objectif : reproduire la logique de Flash Pizzas
 Décision du 2 août 2026 : faire évoluer SARA d'une vitrine statique vers une app complète
@@ -167,9 +176,16 @@ Pizzas pour le détail de chaque mécanisme — ce fichier ne fait qu'indiquer o
     avec `desc` préservé, `total`, `address`, `phone`, `status: "pending"`, `payment_intent`
     renseigné) ; **renvoi du même événement → `duplicate:true`, aucune deuxième commande
     créée** (idempotence confirmée au niveau base, pas juste dans la réponse HTTP).
-    ⚠️ Ce test valide notre code de vérification/traitement, pas la config réelle du
-    dashboard Stripe (qui n'existe pas encore) — un vrai test bout-en-bout (Stripe → notre
-    webhook) reste à faire une fois `STRIPE_WEBHOOK_SECRET` obtenu après déploiement.
+    ⚠️ Ce test-là validait notre code de vérification/traitement, pas la config réelle du
+    dashboard Stripe (qui n'existait pas encore à ce moment).
+  - **✅ Mis à jour après déploiement (2 août 2026)** : endpoint webhook créé pour de vrai dans
+    Stripe (`https://sara-sd8o.onrender.com/api/stripe/webhook`, événement
+    `checkout.session.completed`) avec sa vraie `STRIPE_WEBHOOK_SECRET` posée dans Render.
+    Revérifié avec le même script de simulation mais **contre la vraie URL de prod et la
+    vraie signing secret** : `HTTP 200 {"received":true}`, commande bien créée dans Supabase
+    prod, supprimée après coup. Deux premiers essais ont échoué (signature invalide) — pas un
+    bug de code, juste testé pendant une rafale de redéploiements Render déclenchés à la
+    suite ; une fois les déploiements stabilisés, ça passe du premier coup.
   - Données de test nettoyées après coup (ordres + doublons vérifiés absents).
 - `npm run check` + `npm run build` ✅.
 
