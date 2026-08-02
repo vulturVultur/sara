@@ -279,7 +279,6 @@ function Hero() {
         </div>
 
         <div className="max-w-5xl mx-auto px-5 sm:px-8 text-center relative z-10">
-          <p className="text-sara-creamSoft/90 font-medium tracking-wide mb-6">• Frais • Rapide • Savoureux</p>
           <h1 className="heading text-white text-5xl sm:text-6xl md:text-7xl max-w-4xl mx-auto drop-shadow-lg">
             Le goût qui donne<br />envie de revenir
           </h1>
