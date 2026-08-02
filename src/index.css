@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Le papier de la charte va jusque sous le contenu : évite la bande grise
+   au rebond de défilement (iOS). */
+html,
+body {
+  background-color: #FAF7F0;
+}
+
 #root {
   min-height: 100vh;
 }
