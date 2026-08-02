@@ -434,8 +434,8 @@ function About() {
           <Img src={IMG.salle} emoji="😋" alt="L'ambiance chaleureuse du restaurant Sara" className="w-full h-full object-cover" />
         </Reveal>
 
-        <Reveal delay={100}>
-          <Eyebrow>À propos</Eyebrow>
+        <Reveal delay={100} className="text-center">
+          <div className="flex justify-center"><Eyebrow>À propos</Eyebrow></div>
           <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Une expérience d'exception, qualité premium et saveurs riches</h2>
           <p className="mt-5 text-sara-muted leading-relaxed">
             Nous réunissons des ingrédients premium, un vrai savoir-faire et une passion du goût —
@@ -446,7 +446,7 @@ function About() {
           <p className="mt-3 text-sara-muted">{INFO.hoursWeek}</p>
           <p className="text-sara-muted">{INFO.hoursWeekend}</p>
 
-          <div className="mt-8">
+          <div className="mt-8 flex justify-center">
             <PillLink href="#contact">Réserver une table</PillLink>
           </div>
         </Reveal>
