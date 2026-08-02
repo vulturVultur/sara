@@ -37,11 +37,6 @@ const INFO = {
   hoursWeekend: 'Ven – Dim : 11h00 – 01h00',
 };
 
-const chf = (n) => {
-  const v = Math.round(n * 100) / 100;
-  return Number.isInteger(v) ? `${v}.- CHF` : `${v.toFixed(2)} CHF`;
-};
-
 const CATEGORIES = [
   { id: 'kebabs', label: 'Kebabs', image: IMG.durum, emoji: '🌯' },
   { id: 'burgers', label: 'Burgers', image: IMG.burger, emoji: '🍔' },
@@ -76,11 +71,6 @@ const OFFERS = [
     title: 'BURGERS SIGNATURE', subtitle: 'RICHES. JUTEUX. GÉNÉREUX.',
     save: '30%', image: IMG.burgerAlt, emoji: '🍔',
   },
-];
-
-const MENU_DISHES = [
-  { name: 'Burger Sara', price: 9.5, image: IMG.burger, emoji: '🍔', description: 'Steak 150g, cheddar fondu, oignons confits et sauce signature Sara.' },
-  { name: 'Assiette Mixte', price: 13.5, image: IMG.assiette, emoji: '🍽️', description: 'Brochettes de poulet et bœuf, riz safran, frites, salade et sauces.' },
 ];
 
 const FEATURES = [
@@ -134,7 +124,6 @@ const POSTS = [
 
 const NAV = [
   { href: '#accueil', label: 'Accueil' },
-  { href: '#categories', label: 'Catégories' },
   { href: '#menu', label: 'Menu' },
   { href: '#chicha', label: 'Chicha' },
   { href: '#about', label: 'À propos' },
@@ -320,9 +309,9 @@ function Hero() {
 function Categories() {
   const loop = [...CATEGORIES, ...CATEGORIES];
   return (
-    <section id="categories" className="py-16 md:py-24 bg-sara-cream">
+    <section id="menu" className="py-16 md:py-24 bg-sara-cream">
       <div className="max-w-3xl mx-auto px-5 text-center mb-12">
-        <Eyebrow>Catégories</Eyebrow>
+        <Eyebrow>Notre menu</Eyebrow>
         <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Découvrez nos plats populaires</h2>
       </div>
 
@@ -404,45 +393,6 @@ function SpecialOffers() {
 /* ------------------------------------------------------------------ */
 /*  Our Menu — Discover Flavors                                        */
 /* ------------------------------------------------------------------ */
-
-function DiscoverMenu() {
-  return (
-    <section id="menu" className="py-16 md:py-24 bg-sara-red text-white">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-12">
-          <div className="max-w-lg">
-            <Eyebrow className="text-white">Notre menu</Eyebrow>
-            <h2 className="heading text-white text-4xl sm:text-5xl mt-3">Des saveurs que vous allez adorer</h2>
-            <p className="mt-4 text-white/70">
-              Découvrez nos plats préparés avec soin — ingrédients frais, saveurs franches,
-              goût riche, qualité premium et un parfum irrésistible.
-            </p>
-          </div>
-          <PillLink href="#contact" variant="dark" className="shrink-0">Réserver une table</PillLink>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          {MENU_DISHES.map((d, i) => (
-            <Reveal key={d.name} delay={i * 100}>
-              <article className="rounded-3xl overflow-hidden bg-sara-redDark/40">
-                <div className="aspect-4-3 overflow-hidden">
-                  <Img src={d.image} emoji={d.emoji} alt={d.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-                </div>
-                <div className="p-6">
-                  <div className="flex items-baseline justify-between gap-4">
-                    <h3 className="heading text-2xl">{d.name}</h3>
-                    <span className="font-display text-xl text-sara-orange whitespace-nowrap">{chf(d.price)}</span>
-                  </div>
-                  <p className="mt-2 text-white/70">{d.description}</p>
-                </div>
-              </article>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /*  Chicha — carrousel du salon                                        */
@@ -802,7 +752,7 @@ function CtaFooter() {
             </p>
           </div>
 
-          <FooterCol title="Menu" links={[['#menu', 'Menu'], ['#offres', 'Offres'], ['#categories', 'Catégories']]} />
+          <FooterCol title="Menu" links={[['#menu', 'Menu'], ['#offres', 'Offres'], ['#chicha', 'Chicha']]} />
           <FooterCol title="Restaurant" links={[['#about', 'À propos'], ['#catering', 'Traiteur'], ['#galerie', 'Galerie']]} />
           <FooterCol title="Aide" links={[['#faq', 'FAQ'], ['#contact', 'Contact']]} />
           <FooterCol title="Légal" links={[['#', 'Confidentialité'], ['#', 'Conditions']]} />
@@ -849,7 +799,6 @@ export default function SaraSite() {
         <Hero />
         <Categories />
         <SpecialOffers />
-        <DiscoverMenu />
         <Chicha />
         <About />
         <WhyChoose />
