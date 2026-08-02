@@ -10,9 +10,12 @@ réservation chicha), construit avec React + Vite.
 - [Tailwind CSS 3](https://tailwindcss.com/) pour la mise en page (utilitaires `flex`, `grid`, `rounded-*`…)
 - [lucide-react](https://lucide.dev/) pour les icônes
 
-Les couleurs de marque (`bg-sara-red`, `text-sara-black`, `glow-red`…), la vague, les
-polices et les animations sont définies à la main dans `src/sara.css` — pas via le thème
-Tailwind. Les photos sont servies depuis `public/img/` (chemins `/img/...`), sans base64.
+Le site est une **vitrine** au style « FreshBox » : hero avec carrousel de plats, catégories
+en marquee défilant, offres, menu, à propos, atouts, traiteur, témoignages, FAQ, galerie,
+blog et pied de page. La palette (`sara.red`, `sara.cream`, `sara.orange`, `sara.brown`…) et
+les polices (`Anton` pour les titres, `Poppins` pour le corps) sont définies dans le thème
+Tailwind (`tailwind.config.js`) ; la vague, le wordmark 3D, les carrousels et animations
+sont dans `src/sara.css`. Les photos sont servies depuis `public/img/` (chemins `/img/...`).
 
 ## Démarrage
 
@@ -43,10 +46,11 @@ npm run preview   # prévisualise le build de production
 
 ## À faire avant la mise en ligne
 
-- **Panier** : le `CartProvider` garde l'état en mémoire uniquement. Rebrancher
-  `localStorage` pour survivre à un rechargement.
-- **Back-office** : les boutons « Commander / Réserver / Payer » ne font que modifier
-  un état local. À brancher : paiement (Stripe), commandes/réservations, notification cuisine.
-- **Coordonnées** : le pied de page affiche encore une adresse et un numéro de démo
-  (`12 rue des Lilas, Lyon`) alors que les prix sont en CHF — à corriger dans `Footer`.
-- **Photos manquantes** : les desserts (Baklava) affichent un bloc « Photo à venir ».
+- **Coordonnées** : les infos de contact sont des placeholders dans l'objet `INFO`
+  (`src/SaraSite.jsx`) — adresse `12 rue des Lilas, Lyon`, téléphone et horaires à confirmer,
+  ainsi que la devise (prix en CHF). À remplacer par les vraies données.
+- **Photos manquantes** : plusieurs sections attendent des visuels (portrait client/chef des
+  témoignages, catégorie Desserts, articles de blog). Elles affichent un bloc « Photo à venir »
+  tant que l'image n'est pas fournie dans `public/img/`.
+- **Liens** : les boutons « Commander / Réserver / Explorer / Lire l'article » pointent vers des
+  ancres internes. À brancher sur les vraies pages (commande, réservation, blog) si besoin.

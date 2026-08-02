@@ -1,29 +1,15 @@
-import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './sara.css';
 import {
-  ShoppingBag, Menu as MenuIcon, X, CalendarDays, ChevronRight, ChevronLeft,
-  Bike, Store, Clock, MapPin, Users, Check, Plus, Minus, Trash2,
-  Star, Flame, Heart, Wind, Quote, Phone, Instagram, Facebook
+  Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
+  ChevronDown, Utensils, Armchair, UserPlus, Leaf, Quote, Flame,
+  Clock, MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
 } from 'lucide-react';
 
-
 /* ------------------------------------------------------------------ */
-/*  src/data/menu.js                                                   */
+/*  Données                                                            */
 /* ------------------------------------------------------------------ */
 
-const CATEGORIES = [
-  { id: 'kebabs', label: 'Kebabs' },
-  { id: 'burgers', label: 'Burgers' },
-  { id: 'tacos', label: 'Tacos' },
-  { id: 'assiettes', label: 'Assiettes' },
-  { id: 'menus', label: 'Menus' },
-  { id: 'boissons', label: 'Boissons' },
-  { id: 'desserts', label: 'Desserts' },
-  { id: 'chichas', label: 'Chichas' },
-];
-
-/* Photos réelles du restaurant, embarquées en data-URI (aucune dépendance réseau).
-   hero / broche / plate / drink sont 4 cadrages tirés de la même prise de vue comptoir. */
 const IMG = {
   logo: '/img/logo.png',
   hero: '/img/hero.jpg',
@@ -41,56 +27,112 @@ const IMG = {
   chicha: '/img/chicha.jpg',
 };
 
-const EMOJI = {
-  kebabs: '🌯', burgers: '🍔', tacos: '🌮', assiettes: '🍽️',
-  menus: '🥡', boissons: '🥤', desserts: '🍰', chichas: '💨',
+/* Infos de contact — À CONFIRMER par le client (placeholder). */
+const INFO = {
+  name: 'Sara Pizzeraya Kebap',
+  address: '12 rue des Lilas, 69001 Lyon',
+  phone: '+41 00 000 00 00',
+  hoursWeek: 'Lun – Jeu : 11h00 – 23h00',
+  hoursWeekend: 'Ven – Dim : 11h00 – 01h00',
 };
-
-const PRODUCTS = [
-  { id: 'kebab-classique', name: 'Kebab Classique', description: 'Pain pita, viande grillée, crudités fraîches et sauce blanche maison.', price: 8.5, image: IMG.durum, category: 'kebabs', badge: 'bestseller', rating: 4.9 },
-  { id: 'durum-poulet', name: 'Durum Poulet', description: 'Galette roulée grillée, poulet mariné, frites et sauce samouraï.', price: 9.0, image: IMG.tacosAlt, category: 'kebabs', badge: 'loved', rating: 4.8 },
-  { id: 'double-cheese', name: 'Double Cheeseburger', description: 'Deux steaks hachés, cheddar fondu, bacon croustillant, sauce maison.', price: 10.5, image: IMG.burger, category: 'burgers', badge: 'bestseller', rating: 4.9 },
-  { id: 'burger-sara', name: 'Burger Sara', description: 'Steak 150g, cheddar, oignons confits, sauce signature Sara.', price: 9.5, image: IMG.burgerAlt, category: 'burgers', rating: 4.7 },
-  { id: 'tacos-lyonnais', name: 'Tacos XL', description: 'Galette grillée, viande au choix, frites, sauce fromagère onctueuse.', price: 9.0, image: IMG.tacos, category: 'tacos', badge: 'loved', rating: 4.8 },
-  { id: 'assiette-mixte', name: 'Assiette Mixte', description: 'Brochettes de poulet et bœuf, riz safran, frites, salade, sauces.', price: 13.5, image: IMG.assiette, category: 'assiettes', badge: 'bestseller', rating: 4.9 },
-  { id: 'assiette-poulet', name: 'Assiette Poulet', description: 'Émincé de poulet grillé, frites maison, crudités et sauce blanche.', price: 11.5, image: IMG.assietteAlt, category: 'assiettes', rating: 4.6 },
-  { id: 'menu-etudiant', name: 'Menu Étudiant', description: 'Kebab + frites + boisson au choix. Le meilleur rapport qualité-prix.', price: 9.9, image: IMG.plate, category: 'menus', badge: 'bestseller', rating: 4.8 },
-  { id: 'menu-famille', name: 'Menu Famille', description: '4 kebabs + grandes frites + 4 boissons. Idéal pour partager.', price: 32.0, image: IMG.broche, category: 'menus', rating: 4.7 },
-  { id: 'soda', name: 'Boisson 33cl', description: 'Coca, Fanta, Sprite, eau plate ou pétillante au choix.', price: 2.5, image: IMG.drink, category: 'boissons', rating: 4.5 },
-  { id: 'baklava', name: 'Assortiment Baklava', description: 'Pâtisseries orientales au miel et pistaches, fait maison.', price: 4.5, image: null, category: 'desserts', badge: 'loved', rating: 4.9 },
-  { id: 'chicha-classique', name: 'Chicha Classique', description: 'Chicha premium, parfum au choix. Installation et service inclus.', price: 15.0, image: IMG.chicha, category: 'chichas', badge: 'bestseller', rating: 4.8 },
-];
-
-const OFFERS = [
-  '🔥 Menu Kebab + Boisson à 9.90 CHF',
-  '🚚 Livraison offerte dès 20.- CHF',
-  '💨 Happy Hour Chicha — 15.- CHF',
-  '🎓 Menu étudiant toute la journée',
-  '🍰 Dessert offert pour toute commande +25.- CHF',
-];
-
-const GALLERY = [
-  { src: IMG.durum, alt: 'Kebab roulé, crudités et sauce blanche', emoji: '🌯' },
-  { src: IMG.burger, alt: 'Double cheeseburger et frites maison', emoji: '🍔' },
-  { src: IMG.assiette, alt: 'Assiette mixte brochettes, riz safran et frites', emoji: '🍽️' },
-  { src: IMG.salle, alt: 'La salle du restaurant Sara', emoji: '🪑' },
-  { src: IMG.tacos, alt: 'Tacos XL galette grillée, poulet et sauce fromagère', emoji: '🌮' },
-  { src: IMG.chicha, alt: "Espace chicha à l'ambiance tamisée", emoji: '💨' },
-];
-
-const REVIEWS = [
-  { name: 'Yanis B.', rating: 5, comment: 'Meilleur kebab du quartier ! Viande tendre, frites maison, service rapide. Je recommande à 100%.' },
-  { name: 'Sarah M.', rating: 5, comment: "L'espace chicha est super cosy et les parfums sont excellents. On a passé une super soirée." },
-  { name: 'Karim A.', rating: 5, comment: 'Commande en livraison, tout est arrivé chaud et délicieux. Le double cheeseburger est une tuerie.' },
-  { name: 'Léa D.', rating: 4, comment: 'Très bon rapport qualité-prix, le menu étudiant sauve ma vie. Livraison rapide même le soir.' },
-];
-
-const HERO_IMAGE = IMG.hero;
 
 const chf = (n) => {
   const v = Math.round(n * 100) / 100;
   return Number.isInteger(v) ? `${v}.- CHF` : `${v.toFixed(2)} CHF`;
 };
+
+const CATEGORIES = [
+  { id: 'kebabs', label: 'Kebabs', image: IMG.durum, emoji: '🌯' },
+  { id: 'burgers', label: 'Burgers', image: IMG.burger, emoji: '🍔' },
+  { id: 'tacos', label: 'Tacos', image: IMG.tacos, emoji: '🌮' },
+  { id: 'assiettes', label: 'Assiettes', image: IMG.assiette, emoji: '🍽️' },
+  { id: 'menus', label: 'Menus', image: IMG.plate, emoji: '🥡' },
+  { id: 'boissons', label: 'Boissons', image: IMG.drink, emoji: '🥤' },
+  { id: 'desserts', label: 'Desserts', image: null, emoji: '🍰' },
+  { id: 'chichas', label: 'Chichas', image: IMG.chicha, emoji: '💨' },
+];
+
+/* Plats affichés dans le carrousel hero (le plat central défile). */
+const HERO_DISHES = [
+  { image: IMG.burger, emoji: '🍔', alt: 'Double cheeseburger et frites maison' },
+  { image: IMG.durum, emoji: '🌯', alt: 'Kebab roulé grillé et crudités fraîches' },
+  { image: IMG.assiette, emoji: '🍽️', alt: 'Assiette mixte brochettes et riz safran' },
+  { image: IMG.tacos, emoji: '🌮', alt: 'Tacos XL galette grillée et sauce fromagère' },
+];
+
+const OFFERS = [
+  {
+    tag: "Sélection du chef", theme: 'orange',
+    title: 'PRÉPARÉ MINUTE', subtitle: 'SERVI À LA PERFECTION',
+    save: '40%', image: IMG.assietteAlt, emoji: '🍽️',
+  },
+  {
+    tag: 'Spécialité four', theme: 'red',
+    title: 'BROCHE MAISON', subtitle: 'FONDANTE & PARFUMÉE',
+    save: '50%', image: IMG.broche, emoji: '🔥',
+  },
+  {
+    tag: 'Offre signature', theme: 'green',
+    title: 'BURGERS SIGNATURE', subtitle: 'RICHES. JUTEUX. GÉNÉREUX.',
+    save: '30%', image: IMG.burgerAlt, emoji: '🍔',
+  },
+];
+
+const MENU_DISHES = [
+  { name: 'Burger Sara', price: 9.5, image: IMG.burger, emoji: '🍔', description: 'Steak 150g, cheddar fondu, oignons confits et sauce signature Sara.' },
+  { name: 'Assiette Mixte', price: 13.5, image: IMG.assiette, emoji: '🍽️', description: 'Brochettes de poulet et bœuf, riz safran, frites, salade et sauces.' },
+];
+
+const FEATURES = [
+  { icon: Utensils, title: 'Cuisine généreuse', text: 'Préparée avec des ingrédients frais et des saveurs qui donnent envie.' },
+  { icon: Armchair, title: 'Ambiance cosy', text: 'Un cadre chaleureux et un espace chicha pour prolonger la soirée.' },
+  { icon: UserPlus, title: 'Service rapide', text: 'Une équipe dédiée à un service fluide, en salle comme en livraison.' },
+  { icon: Leaf, title: 'Produits frais', text: 'Des ingrédients sélectionnés chaque jour pour une qualité constante.' },
+];
+
+const CATERING = [
+  { label: 'Plat 1', name: 'Assiette Mixte Traiteur', image: IMG.assiette, emoji: '🍽️', description: 'Brochettes de poulet et bœuf, riz safran et sauces maison, pour partager.' },
+  { label: 'Plat 2', name: 'Plateau Burgers Gourmet', image: IMG.burgerAlt, emoji: '🍔', description: 'Burgers généreux garnis d’ingrédients frais, parfaits pour les grandes tablées.' },
+  { label: 'Plat 3', name: 'Durum & Grillades', image: IMG.durum, emoji: '🌯', description: 'Galettes roulées grillées minute, viandes marinées et sauces au choix.' },
+];
+
+const REVIEWS = [
+  { name: 'Yanis B.', role: 'Client fidèle', comment: 'Meilleur kebab du quartier ! Viande tendre, frites maison, service rapide. Je reviens à chaque fois avec le même plaisir.' },
+  { name: 'Sarah M.', role: 'Habituée chicha', comment: 'L’espace chicha est super cosy et les parfums sont excellents. Une super soirée du début à la fin, à refaire.' },
+  { name: 'Karim A.', role: 'Commande en ligne', comment: 'Commande en livraison, tout est arrivé chaud et délicieux. Le double cheeseburger est une vraie tuerie.' },
+];
+
+const FAQ = [
+  { q: 'Combien de temps prend la livraison ?', a: 'En moyenne 25 à 40 minutes selon votre adresse et l’affluence. La livraison est offerte dès 20.- CHF de commande.' },
+  { q: 'Proposez-vous un service traiteur ?', a: 'Oui, du petit rassemblement au grand événement. Contactez-nous pour un devis personnalisé et un menu sur mesure.' },
+  { q: 'Puis-je réserver une table en ligne ?', a: 'Bien sûr. Réservez votre table ou votre coin chicha directement en nous appelant ou via le bouton « Réserver une table ».' },
+  { q: 'Vos ingrédients sont-ils frais ?', a: 'Nous sélectionnons nos produits chaque jour et préparons nos plats minute pour garantir fraîcheur et qualité.' },
+  { q: 'Avez-vous un espace chicha ?', a: 'Oui, un espace chicha premium avec un large choix de parfums, dans une ambiance cosy et tamisée.' },
+];
+
+const GALLERY = [
+  { src: IMG.assietteAlt, emoji: '🍽️', alt: 'Assiette généreuse et accompagnements', span: 'row' },
+  { src: IMG.plate, emoji: '🍴', alt: 'Plat servi à table' },
+  { src: IMG.assiette, emoji: '🥗', alt: 'Assiette mixte et sauces' },
+  { src: IMG.burger, emoji: '🍔', alt: 'Burger et frites maison' },
+  { src: IMG.durum, emoji: '🌯', alt: 'Kebab roulé garni' },
+  { src: IMG.tacos, emoji: '🍕', alt: 'Tacos XL et sauce fromagère' },
+];
+
+const POSTS = [
+  { image: IMG.burger, emoji: '🍔', read: '4 min', date: '24 avr. 2026', title: 'Le secret d’un burger juteux et parfait' },
+  { image: IMG.tacos, emoji: '🍕', read: '4 min', date: '15 juin 2026', title: 'Pourquoi des ingrédients frais changent tout' },
+];
+
+const NAV = [
+  { href: '#accueil', label: 'Accueil' },
+  { href: '#categories', label: 'Catégories' },
+  { href: '#menu', label: 'Menu' },
+  { href: '#about', label: 'À propos' },
+  { href: '#catering', label: 'Traiteur' },
+  { href: '#galerie', label: 'Galerie' },
+  { href: '#contact', label: 'Contact' },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -102,23 +144,23 @@ function Img({ src, alt, className = '', emoji = '🍽️' }) {
     return (
       <div className={`${className} sara-placeholder flex flex-col items-center justify-center gap-1`} role="img" aria-label={alt}>
         <span className="text-4xl" aria-hidden="true">{emoji}</span>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-sara-black/40">Photo à venir</span>
+        <span className="text-[10px] font-bold uppercase tracking-wide text-sara-brown/40">Photo à venir</span>
       </div>
     );
   }
   return <img src={src} alt={alt} className={className} loading="lazy" onError={() => setErr(true)} />;
 }
 
-function Wave({ fill }) {
+function Wave({ fill, stroke }) {
   return (
-    <svg className="sara-wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M0,44 C210,96 400,-6 720,32 C1010,66 1230,4 1440,40 L1440,90 L0,90 Z" fill={fill} />
-      <path d="M0,44 C210,96 400,-6 720,32 C1010,66 1230,4 1440,40" fill="none" stroke="#D62828" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+    <svg className="sara-wave" viewBox="0 0 1440 96" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,48 C240,104 420,4 720,40 C1010,74 1230,8 1440,44 L1440,96 L0,96 Z" fill={fill} />
+      {stroke && <path d="M0,48 C240,104 420,4 720,40 C1010,74 1230,8 1440,44" fill="none" stroke={stroke} strokeWidth="3" vectorEffect="non-scaling-stroke" />}
     </svg>
   );
 }
 
-function Reveal({ children, delay = 0, className = '', ...rest }) {
+function Reveal({ children, delay = 0, className = '', as: Tag = 'div', ...rest }) {
   const ref = useRef(null);
   const [seen, setSeen] = useState(false);
   useEffect(() => {
@@ -132,111 +174,68 @@ function Reveal({ children, delay = 0, className = '', ...rest }) {
     return () => io.disconnect();
   }, []);
   return (
-    <div ref={ref} className={`reveal ${seen ? 'is-in' : ''} ${className}`} style={{ transitionDelay: `${delay}ms` }} {...rest}>
+    <Tag ref={ref} className={`reveal ${seen ? 'is-in' : ''} ${className}`} style={{ transitionDelay: `${delay}ms` }} {...rest}>
       {children}
-    </div>
+    </Tag>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  CartContext (sans localStorage — interdit dans les artefacts)      */
-/* ------------------------------------------------------------------ */
-
-const CartContext = createContext(null);
-
-function CartProvider({ children }) {
-  const [items, setItems] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [flash, setFlash] = useState(null);
-
-  const addItem = useCallback((product) => {
-    setItems((prev) => {
-      const found = prev.find((i) => i.id === product.id);
-      if (found) return prev.map((i) => (i.id === product.id ? { ...i, qty: i.qty + 1 } : i));
-      return [...prev, { ...product, qty: 1 }];
-    });
-    setFlash(product.id);
-    setTimeout(() => setFlash(null), 600);
-  }, []);
-
-  const removeItem = useCallback((id) => setItems((prev) => prev.filter((i) => i.id !== id)), []);
-
-  const setQty = useCallback((id, qty) => {
-    if (qty <= 0) { setItems((prev) => prev.filter((i) => i.id !== id)); return; }
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, qty } : i)));
-  }, []);
-
-  const clear = useCallback(() => setItems([]), []);
-  const count = items.reduce((s, i) => s + i.qty, 0);
-  const total = items.reduce((s, i) => s + i.price * i.qty, 0);
-
+/* Bouton pilule façon FreshBox (coin haut-droit rogné) */
+function PillLink({ href = '#menu', children, variant = 'red', className = '' }) {
+  const styles = {
+    red: 'bg-sara-red text-white hover:bg-sara-redDark',
+    dark: 'bg-sara-redDark text-white hover:bg-sara-ink',
+    cream: 'bg-white text-sara-red hover:bg-sara-creamSoft',
+  };
   return (
-    <CartContext.Provider value={{ items, open, setOpen, addItem, removeItem, setQty, clear, count, total, flash }}>
+    <a
+      href={href}
+      className={`group inline-flex items-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none transition ${styles[variant]} ${className}`}
+    >
       {children}
-    </CartContext.Provider>
+      <ArrowUpRight className="w-5 h-5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+    </a>
   );
 }
 
-const useCart = () => {
-  const ctx = useContext(CartContext);
-  if (!ctx) throw new Error('useCart must be used within CartProvider');
-  return ctx;
-};
+function Eyebrow({ children, className = 'text-sara-red' }) {
+  return <span className={`eyebrow ${className}`}>{children}</span>;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Header                                                             */
 /* ------------------------------------------------------------------ */
 
-const LINKS = [
-  { href: '#accueil', label: 'Accueil' },
-  { href: '#menu', label: 'Menu' },
-  { href: '#commander', label: 'Commander' },
-  { href: '#reserver', label: 'Réserver' },
-  { href: '#chicha', label: 'Chicha' },
-  { href: '#promos', label: 'Promotions' },
-  { href: '#contact', label: 'Contact' },
-];
-
 function Header() {
-  const { count, setOpen } = useCart();
   const [mobile, setMobile] = useState(false);
-
   return (
     <header className="relative z-50 bg-sara-cream">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="sara-header grid grid-cols-3 items-center">
-          <div className="flex justify-start">
-            <button onClick={() => setMobile(true)} className="p-2 -ml-2 text-sara-black hover:text-sara-red transition-colors" aria-label="Ouvrir le menu">
-              <MenuIcon className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="flex justify-center">
-            <a href="#accueil" aria-label="Sara Pizzeraya Kebap — accueil">
-              <img src={IMG.logo} alt="Sara Pizzeraya Kebap" className="sara-logo" />
-            </a>
-          </div>
-          <div className="flex justify-end">
-            <button onClick={() => setOpen(true)} className="relative inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sara-red text-white font-semibold text-sm glow-red hover:bg-sara-red-dark active:scale-95 transition">
-              <ShoppingBag className="w-4 h-4" />
-              <span className="hidden sm:inline">Panier</span>
-              {count > 0 && <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-sara-black text-white text-xs font-bold flex items-center justify-center">{count}</span>}
-            </button>
-          </div>
+      <div className="max-w-7xl mx-auto px-5 sm:px-8">
+        <div className="h-24 flex items-center justify-between">
+          <a href="#accueil" className="sara-wordmark" aria-label="Sara — accueil">Sara</a>
+          <nav className="hidden lg:flex items-center gap-8">
+            {NAV.map((l) => (
+              <a key={l.href} href={l.href} className="text-sm font-semibold text-sara-brown/80 hover:text-sara-red transition">{l.label}</a>
+            ))}
+          </nav>
+          <button onClick={() => setMobile(true)} className="sara-burger lg:hidden" aria-label="Ouvrir le menu">
+            <MenuIcon className="w-6 h-6" />
+          </button>
         </div>
       </div>
 
       {mobile && (
-        <div className="fixed inset-0 z-60">
-          <div className="absolute inset-0 bg-sara-black/40 fade-in" onClick={() => setMobile(false)} />
-          <div className="absolute right-0 top-0 h-full w-72 bg-white shadow-2xl p-6 flex flex-col gap-2">
-            <div className="flex items-center justify-between mb-4">
-              <span className="font-display font-extrabold text-xl text-sara-black">Menu</span>
-              <button onClick={() => setMobile(false)} aria-label="Fermer"><X className="w-6 h-6 text-sara-black" /></button>
+        <div className="fixed inset-0 z-70 lg:hidden">
+          <div className="absolute inset-0 bg-sara-ink/50 fade-in" onClick={() => setMobile(false)} />
+          <div className="absolute right-0 top-0 h-full w-72 bg-sara-cream shadow-2xl p-6 flex flex-col gap-1">
+            <div className="flex items-center justify-between mb-6">
+              <span className="sara-wordmark" style={{ fontSize: '1.6rem' }}>Sara</span>
+              <button onClick={() => setMobile(false)} aria-label="Fermer"><X className="w-6 h-6 text-sara-brown" /></button>
             </div>
-            {LINKS.map((l) => (
-              <a key={l.href} href={l.href} onClick={() => setMobile(false)} className="px-3 py-3 text-base font-medium text-sara-black hover:bg-sara-red/5 hover:text-sara-red rounded-lg">{l.label}</a>
+            {NAV.map((l) => (
+              <a key={l.href} href={l.href} onClick={() => setMobile(false)} className="px-3 py-3 text-base font-semibold text-sara-brown hover:bg-sara-red/5 hover:text-sara-red rounded-xl transition">{l.label}</a>
             ))}
-            <a href="#contact" onClick={() => setMobile(false)} className="mt-4 px-4 py-3 text-center rounded-xl bg-sara-black text-white font-semibold">Connexion</a>
+            <PillLink href="#menu" className="mt-4 justify-center">Commander</PillLink>
           </div>
         </div>
       )}
@@ -245,200 +244,185 @@ function Header() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Hero                                                               */
+/*  Hero — carrousel de plats                                          */
 /* ------------------------------------------------------------------ */
 
 function Hero() {
   const [idx, setIdx] = useState(0);
+  const n = HERO_DISHES.length;
   useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % OFFERS.length), 2800);
+    const t = setInterval(() => setIdx((i) => (i + 1) % n), 3200);
     return () => clearInterval(t);
-  }, []);
+  }, [n]);
 
   return (
-    <section id="accueil" className="relative overflow-hidden bg-sara-cream">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-0 pb-24 md:pt-16 md:pb-28">
-        <div className="hero-grid fade-up">
+    <section id="accueil" className="relative bg-sara-cream">
+      <div className="relative overflow-hidden bg-sara-red">
+        {/* décor flottant */}
+        <span className="pointer-events-none absolute left-6 top-16 text-4xl floaty opacity-90" aria-hidden="true">🌶️</span>
+        <span className="pointer-events-none absolute left-24 bottom-24 text-3xl floaty-slow opacity-80" aria-hidden="true">🌿</span>
+        <span className="pointer-events-none absolute right-10 top-24 text-4xl floaty-slow opacity-90" aria-hidden="true">🍅</span>
+        <span className="pointer-events-none absolute right-28 bottom-28 text-3xl floaty opacity-80" aria-hidden="true">🌶️</span>
 
-          {/* 1. Photo + prix d'appel */}
-          <div className="hero-media">
-            <div className="relative">
-              <div className="relative aspect-4-3 md:aspect-6-5 overflow-hidden">
-                <Img src={HERO_IMAGE} emoji="🥙" alt="Kebab grillé minute avec frites croustillantes et boisson fraîche" className="w-full h-full object-cover" />
+        <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-14 pb-40 md:pt-16 md:pb-52 text-center relative">
+          <p className="text-sara-creamSoft/90 font-medium tracking-wide mb-6">• Frais • Rapide • Savoureux</p>
+          <h1 className="heading text-white text-5xl sm:text-6xl md:text-7xl max-w-4xl mx-auto">
+            Le goût qui donne<br />envie de revenir
+          </h1>
+
+          {/* carrousel : plat central qui défile */}
+          <div className="relative mx-auto mt-10 w-64 h-64 sm:w-80 sm:h-80">
+            {HERO_DISHES.map((d, i) => (
+              <div key={i} className={`hero-slide ${i === idx ? 'is-active' : ''}`} aria-hidden={i !== idx}>
+                <Img src={d.image} emoji={d.emoji} alt={d.alt} className="w-full h-full object-cover rounded-full shadow-2xl ring-8 ring-white/10" />
               </div>
-              <div className="promo-chip absolute left-3 right-3 bottom-0 translate-y-1/2 flex items-center justify-between gap-3 bg-white border-l-4 border-sara-red px-4 py-4 sm:py-5">
-                <span key={idx} className="promo-pop min-w-0 truncate text-sm sm:text-base font-bold text-sara-black">{OFFERS[idx]}</span>
-                <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-sara-red/10">
-                  <ChevronRight className="w-4 h-4 text-sara-red" />
-                </span>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* 2. Titre */}
-          <div className="hero-title text-center">
-            <h1 className="sara-hero-title font-display font-extrabold italic text-4xl sm:text-5xl md:text-6xl leading-tightest text-sara-black">
-              Sara, le goût qui <span className="text-sara-red">donne envie</span> de revenir.
-            </h1>
+          <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
+            <PillLink href="#menu" variant="cream"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
+            <PillLink href="#menu" variant="dark">Voir le menu</PillLink>
           </div>
 
-
-          {/* 3. Meilleures ventes */}
-          <div className="hero-best">
-            <BestSellers inline />
+          {/* points du carrousel */}
+          <div className="mt-8 flex justify-center gap-2">
+            {HERO_DISHES.map((_, i) => (
+              <button key={i} onClick={() => setIdx(i)} className={`h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-white' : 'w-2 bg-white/40'}`} aria-label={`Plat ${i + 1}`} />
+            ))}
           </div>
-
-          {/* 4. Actions */}
-          <div className="hero-cta flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="#commander" className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-sara-red text-white font-bold text-base glow-red-lg hover:bg-sara-red-dark active:scale-95 transition">
-              <ShoppingBag className="w-5 h-5" /> Commander maintenant
-            </a>
-          </div>
-
         </div>
-      </div>
 
-      <Wave fill="#FFFFFF" />
+        <Wave fill="#FBEFD5" />
+      </div>
     </section>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  QuickOrder                                                         */
+/*  Categories — marquee défilant                                      */
 /* ------------------------------------------------------------------ */
 
-function Field({ icon: Icon, label, children }) {
+function Categories() {
+  const loop = [...CATEGORIES, ...CATEGORIES];
   return (
-    <label className="block">
-      <span className="text-xs font-semibold text-sara-black/60 uppercase tracking-wide">{label}</span>
-      <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-sara-black/10 bg-white px-3 py-2.5 focus-ring transition">
-        {Icon && <Icon className="w-4 h-4 text-sara-black/40 shrink-0" />}
-        {children}
+    <section id="categories" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-3xl mx-auto px-5 text-center mb-12">
+        <Eyebrow>Catégories</Eyebrow>
+        <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Découvrez nos plats populaires</h2>
+        <p className="mt-4 text-sara-muted">
+          Une variété de plats préparés minute, pensés pour satisfaire toutes les envies —
+          saveurs riches, ingrédients premium et plaisir garanti pour tous.
+        </p>
       </div>
-    </label>
+
+      <div className="marquee">
+        <div className="marquee__track">
+          {loop.map((c, i) => (
+            <a key={`${c.id}-${i}`} href="#menu" className="shrink-0 w-44 sm:w-52 text-center group" aria-label={c.label}>
+              <div className="aspect-square rounded-3xl overflow-hidden bg-sara-orange/15 p-3 transition group-hover:-translate-y-1">
+                <Img src={c.image} emoji={c.emoji} alt={c.label} className="w-full h-full object-contain drop-shadow-lg" />
+              </div>
+              <p className="mt-3 font-semibold text-sara-brown text-lg">{c.label}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
-const inputCls = 'w-full bg-transparent outline-none text-sm font-medium text-sara-black placeholder-sara';
+/* ------------------------------------------------------------------ */
+/*  Special Offers                                                     */
+/* ------------------------------------------------------------------ */
 
-function QuickOrder() {
-  const [mode, setMode] = useState('livraison');
-  const [orderDone, setOrderDone] = useState(false);
-  const [resDone, setResDone] = useState(false);
-  const [askMeal, setAskMeal] = useState(false);
-
+function OfferCard({ offer, large = false }) {
+  const themes = {
+    orange: 'from-sara-orange to-[#E8890B] text-white',
+    red: 'bg-sara-red text-white',
+    green: 'bg-sara-green text-white',
+  };
+  const bg = offer.theme === 'orange' ? `bg-gradient-to-br ${themes.orange}` : themes[offer.theme];
   return (
-    <section id="commander" className="relative overflow-hidden pt-10 pb-24 md:pt-12 md:pb-28 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <h2 className="font-display font-extrabold text-3xl sm:text-4xl text-sara-black">Commandez ou réservez en 30 secondes</h2>
-          <p className="mt-3 text-sara-black/60">Choisissez ce qui vous convient. Tout est pensé pour aller vite.</p>
+    <div className={`relative overflow-hidden rounded-3xl ${bg} ${large ? 'p-8 min-h-[26rem]' : 'p-7 min-h-[13rem]'} flex flex-col`}>
+      {/* image (arrière-plan) */}
+      <div className={`absolute z-0 pointer-events-none ${large ? 'right-0 -bottom-4 w-1/2' : 'right-1 -bottom-2 w-2/5'}`}>
+        <Img src={offer.image} emoji={offer.emoji} alt={offer.title} className="w-full h-full object-contain drop-shadow-2xl" />
+      </div>
+      {/* pastille remise */}
+      <div className="sara-starburst absolute z-20 top-6 right-6 w-24 h-24 bg-white text-sara-brown flex flex-col items-center justify-center text-center">
+        <span className="text-[10px] font-semibold leading-none">Jusqu'à</span>
+        <span className="font-display text-2xl leading-none mt-0.5">{offer.save}</span>
+      </div>
+      {/* contenu (au-dessus) */}
+      <div className="relative z-10 flex flex-col flex-1">
+        <p className="text-white/85 font-medium mb-2">{offer.tag}</p>
+        <h3 className={`heading text-2xl sm:text-3xl leading-tight ${large ? 'max-w-[55%]' : 'max-w-[62%]'}`}>
+          {offer.title}<br />{offer.subtitle}
+        </h3>
+        <div className="mt-auto pt-6">
+          <PillLink href="#menu" variant="cream"><Flame className="w-4 h-4 text-sara-orange" /> Commander</PillLink>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpecialOffers() {
+  return (
+    <section id="offres" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-3xl mx-auto px-5 text-center mb-12">
+        <Eyebrow>Offres spéciales</Eyebrow>
+        <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Des offres à ne pas manquer</h2>
+        <p className="mt-4 text-sara-muted">
+          Savourez vos plats préférés à prix imbattables — préparés minute et pleins de saveur,
+          avec de bons ingrédients, une belle qualité et des portions généreuses.
+        </p>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 grid md:grid-cols-2 gap-6">
+        <div className="grid gap-6">
+          <Reveal><OfferCard offer={OFFERS[0]} /></Reveal>
+          <Reveal delay={100}><OfferCard offer={OFFERS[1]} /></Reveal>
+        </div>
+        <Reveal delay={150}><OfferCard offer={OFFERS[2]} large /></Reveal>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Our Menu — Discover Flavors                                        */
+/* ------------------------------------------------------------------ */
+
+function DiscoverMenu() {
+  return (
+    <section id="menu" className="py-16 md:py-24 bg-sara-red text-white">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-12">
+          <div className="max-w-lg">
+            <Eyebrow className="text-white">Notre menu</Eyebrow>
+            <h2 className="heading text-white text-4xl sm:text-5xl mt-3">Des saveurs que vous allez adorer</h2>
+            <p className="mt-4 text-white/70">
+              Découvrez nos plats préparés avec soin — ingrédients frais, saveurs franches,
+              goût riche, qualité premium et un parfum irrésistible.
+            </p>
+          </div>
+          <PillLink href="#contact" variant="dark" className="shrink-0">Réserver une table</PillLink>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <Reveal className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-sara-black/5">
-            <div className="flex items-center gap-3 mb-5">
-              <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-sara-red/10 text-sara-red"><Bike className="w-5 h-5" /></span>
-              <div><h3 className="font-display font-bold text-xl text-sara-black">Commander</h3><p className="text-sm text-sara-black/60">Livraison ou à emporter</p></div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-sara-black/5 mb-5">
-              {[{ id: 'livraison', label: 'Livraison', icon: Bike }, { id: 'emporter', label: 'À emporter', icon: Store }].map((m) => (
-                <button key={m.id} onClick={() => setMode(m.id)} className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition ${mode === m.id ? 'bg-white text-sara-red shadow-sm' : 'text-sara-black/60'}`}>
-                  <m.icon className="w-4 h-4" />{m.label}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-3">
-              {mode === 'livraison'
-                ? <Field icon={MapPin} label="Adresse de livraison"><input className={inputCls} placeholder="12 rue des Lilas, Lyon" /></Field>
-                : <Field icon={Store} label="Restaurant de retrait"><input className={inputCls} placeholder="Sara — 12 rue des Lilas" /></Field>}
-              <Field icon={Clock} label="Heure souhaitée">
-                <select className={inputCls} defaultValue=""><option value="" disabled>Choisir une heure</option><option>Dès que possible</option><option>19:00</option><option>19:30</option><option>20:00</option><option>20:30</option></select>
-              </Field>
-            </div>
-            <a href="#menu" onClick={() => setOrderDone(true)} className="mt-5 w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-sara-red text-white font-bold glow-red hover:bg-sara-red-dark active:scale-95 transition">
-              {orderDone ? <Check className="w-5 h-5" /> : <Bike className="w-5 h-5" />}
-              {orderDone ? 'Choisissez vos plats' : 'Commander'}
-            </a>
-          </Reveal>
-
-          <Reveal delay={100} id="reserver" className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-sara-black/5">
-            <div className="flex items-center gap-3 mb-5">
-              <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-sara-black/10 text-sara-black"><CalendarDays className="w-5 h-5" /></span>
-              <div><h3 className="font-display font-bold text-xl text-sara-black">Réserver une table</h3><p className="text-sm text-sara-black/60">On vous garde une place</p></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field icon={CalendarDays} label="Date"><input type="date" className={inputCls} /></Field>
-              <Field icon={Clock} label="Heure"><select className={inputCls} defaultValue=""><option value="" disabled>Heure</option><option>19:00</option><option>19:30</option><option>20:00</option><option>20:30</option><option>21:00</option></select></Field>
-              <div className="col-span-2">
-                <Field icon={Users} label="Nombre de personnes">
-                  <select className={inputCls} defaultValue="2"><option value="1">1 personne</option><option value="2">2 personnes</option><option value="3">3 personnes</option><option value="4">4 personnes</option><option value="5">5 personnes</option><option value="6">6 personnes ou plus</option></select>
-                </Field>
-              </div>
-            </div>
-            <button onClick={() => { setResDone(true); setAskMeal(true); }} className="mt-5 w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-sara-black text-white font-bold hover:bg-sara-black/90 active:scale-95 transition">
-              {resDone ? <Check className="w-5 h-5" /> : <CalendarDays className="w-5 h-5" />}
-              {resDone ? 'Réservation confirmée' : 'Réserver'}
-            </button>
-            {askMeal && (
-              <div className="fade-in mt-4 rounded-2xl bg-sara-yellow/15 border border-sara-yellow/40 p-4">
-                <p className="text-sm font-semibold text-sara-black">Souhaitez-vous ajouter votre repas à votre réservation ?</p>
-                <div className="mt-3 flex gap-2">
-                  <a href="#menu" className="flex-1 text-center py-2.5 rounded-xl bg-sara-green text-white font-semibold text-sm hover:opacity-90 transition">Ajouter des plats</a>
-                  <button onClick={() => setAskMeal(false)} className="px-4 py-2.5 rounded-xl bg-white text-sara-black font-semibold text-sm border border-sara-black/10">Plus tard</button>
+          {MENU_DISHES.map((d, i) => (
+            <Reveal key={d.name} delay={i * 100}>
+              <article className="rounded-3xl overflow-hidden bg-sara-redDark/40">
+                <div className="aspect-4-3 overflow-hidden">
+                  <Img src={d.image} emoji={d.emoji} alt={d.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 </div>
-              </div>
-            )}
-          </Reveal>
-        </div>
-      </div>
-
-      <Wave fill="#FAFAFA" />
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  BestSellers                                                        */
-/* ------------------------------------------------------------------ */
-
-function Badge({ type }) {
-  if (type === 'bestseller') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sara-red text-white text-[11px] font-bold shadow-sm whitespace-nowrap"><Flame className="w-3 h-3" /> Bestseller</span>;
-  if (type === 'loved') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sara-yellow text-sara-black text-[11px] font-bold shadow-sm whitespace-nowrap"><Heart className="w-3 h-3" /> Le plus commandé</span>;
-  return null;
-}
-
-function BestSellers({ inline = false }) {
-  const { addItem, flash } = useCart();
-  const items = PRODUCTS.filter((p) => p.badge).slice(0, 4);
-  return (
-    <section className={inline ? '' : 'py-16 md:py-20 bg-white'}>
-      <div className={inline ? '' : 'max-w-7xl mx-auto px-4 sm:px-6'}>
-        <div className="flex items-end justify-between mb-8">
-          <div>
-            <span className="text-sm font-bold text-sara-red uppercase tracking-wide">Les favoris</span>
-            <h2 className="mt-1 font-display font-extrabold text-3xl sm:text-4xl text-sara-black">Nos meilleures ventes</h2>
-          </div>
-          <a href="#menu" className="hidden sm:inline-flex text-sm font-semibold text-sara-red hover:underline">Voir tout le menu →</a>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          {items.map((p, i) => (
-            <Reveal key={p.id} delay={i * 80}>
-              <article className="group h-full bg-white rounded-3xl border border-sara-black/5 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col">
-                <div className="relative aspect-4-3 overflow-hidden">
-                  <Img src={p.image} emoji={EMOJI[p.category]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute top-2 left-2"><Badge type={p.badge} /></div>
-                </div>
-                <div className="p-2.5 sm:p-3 flex flex-col flex-1">
-                  <div className="flex items-center gap-1 mb-1"><Star className="w-3.5 h-3.5 fill-sara-yellow text-sara-yellow" /><span className="text-xs font-bold text-sara-black">{p.rating}</span></div>
-                  <h3 className="font-bold text-xs sm:text-sm text-sara-black leading-tight">{p.name}</h3>
-                  <p className="mt-0.5 text-[11px] text-sara-black/60 clamp-2 leading-snug flex-1">{p.description}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="font-display font-extrabold text-sm sm:text-base text-sara-black whitespace-nowrap">{chf(p.price)}</span>
-                    <button onClick={() => addItem(p)} className={`inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-sara-red text-white glow-red hover:bg-sara-red-dark active:scale-95 transition ${flash === p.id ? 'scale-110' : ''}`} aria-label={`Ajouter ${p.name} au panier`}>
-                      <Plus className="w-4 h-4" />
-                    </button>
+                <div className="p-6">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <h3 className="heading text-2xl">{d.name}</h3>
+                    <span className="font-display text-xl text-sara-orange whitespace-nowrap">{chf(d.price)}</span>
                   </div>
+                  <p className="mt-2 text-white/70">{d.description}</p>
                 </div>
               </article>
             </Reveal>
@@ -450,213 +434,190 @@ function BestSellers({ inline = false }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  MenuSection                                                        */
+/*  About Us                                                           */
 /* ------------------------------------------------------------------ */
 
-function MenuSection() {
-  const [open, setOpen] = useState(false);
-
-  // tout lien pointant vers #menu ouvre la carte (en-tête, favoris, chicha, pied de page)
-  useEffect(() => {
-    const onClick = (e) => {
-      const a = e.target && e.target.closest && e.target.closest('a[href="#menu"]');
-      if (a) setOpen(true);
-    };
-    document.addEventListener('click', onClick);
-    return () => document.removeEventListener('click', onClick);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', onKey);
-    return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); };
-  }, [open]);
-
+function About() {
   return (
-    <>
-      <section id="menu" className="relative overflow-hidden bg-sara-cream">
-        <button
-          onClick={() => setOpen(true)}
-          className="menu-band w-full text-center px-4 py-14 md:py-16 transition"
-        >
-          <span className="text-sm font-bold text-sara-red uppercase tracking-wide">Le menu</span>
-          <h2 className="mt-1 font-display font-extrabold text-3xl sm:text-4xl text-sara-black">Trouvez votre craving</h2>
-          <span className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-sara-red text-white text-sm font-bold glow-red">
-            Voir la carte <ChevronRight className="w-4 h-4" />
-          </span>
-        </button>
+    <section id="about" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 grid md:grid-cols-2 gap-12 items-center">
+        <Reveal className="sara-arch bg-sara-red aspect-5-4 max-w-md mx-auto w-full">
+          <Img src={IMG.salle} emoji="😋" alt="L'ambiance chaleureuse du restaurant Sara" className="w-full h-full object-cover" />
+        </Reveal>
 
-        <Wave fill="#1F1F1F" />
-      </section>
+        <Reveal delay={100}>
+          <Eyebrow>À propos</Eyebrow>
+          <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Une expérience d'exception, qualité premium et saveurs riches</h2>
+          <p className="mt-5 text-sara-muted leading-relaxed">
+            Nous réunissons des ingrédients premium, un vrai savoir-faire et une passion du goût —
+            pour créer des moments inoubliables à chaque bouchée, avec richesse et qualité.
+          </p>
 
-      {open && <MenuOverlay onClose={() => setOpen(false)} />}
-    </>
+          <h3 className="heading text-sara-brown text-2xl mt-8">Horaires d'ouverture</h3>
+          <p className="mt-3 text-sara-muted">{INFO.hoursWeek}</p>
+          <p className="text-sara-muted">{INFO.hoursWeekend}</p>
+
+          <div className="mt-8">
+            <PillLink href="#contact">Réserver une table</PillLink>
+          </div>
+        </Reveal>
+      </div>
+    </section>
   );
 }
 
-function MenuOverlay({ onClose }) {
-  const [active, setActive] = useState('kebabs');
-  const { addItem, flash } = useCart();
-  const items = PRODUCTS.filter((p) => p.category === active);
+/* ------------------------------------------------------------------ */
+/*  Why Choose Us                                                      */
+/* ------------------------------------------------------------------ */
 
+function WhyChoose() {
   return (
-    <div className="fixed inset-0 z-55 flex flex-col bg-sara-cream fade-in">
-      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16 bg-white border-b border-sara-black/5 shrink-0">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold text-sara-red uppercase tracking-wide leading-none">Le menu</p>
-          <p className="mt-1 font-display font-extrabold text-lg text-sara-black leading-none truncate">Trouvez votre craving</p>
+    <section id="atouts" className="relative bg-sara-red text-white">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-16 md:py-24">
+        <div className="max-w-2xl mx-auto text-center mb-12">
+          <Eyebrow className="text-white">Pourquoi nous choisir</Eyebrow>
+          <h2 className="heading text-white text-4xl sm:text-5xl mt-3">Plébiscité par les gourmands</h2>
+          <p className="mt-4 text-white/70">
+            Nous combinons des ingrédients de qualité, une cuisine experte et un service
+            attentionné pour offrir une expérience inoubliable.
+          </p>
         </div>
-        <button onClick={onClose} className="p-2 -mr-2 text-sara-black hover:text-sara-red transition-colors" aria-label="Fermer la carte">
-          <X className="w-6 h-6" />
-        </button>
-      </div>
 
-      <div className="px-4 sm:px-6 py-3 border-b border-sara-black/5 shrink-0 bg-sara-cream">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {CATEGORIES.map((c) => (
-            <button key={c.id} onClick={() => setActive(c.id)} className={`shrink-0 px-4 py-2.5 rounded-2xl text-sm font-semibold transition ${active === c.id ? 'bg-sara-red text-white glow-red' : 'bg-white text-sara-black/70 border border-sara-black/5 hover:border-sara-red/30'}`}>
-              {c.label}
-            </button>
+        <div className="grid sm:grid-cols-2 gap-5">
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={i * 80}>
+              <div className="h-full rounded-3xl bg-sara-redDark/50 p-8 text-center">
+                <f.icon className="w-12 h-12 mx-auto text-white/70" strokeWidth={1.5} />
+                <h3 className="heading text-2xl mt-6">{f.title}</h3>
+                <p className="mt-3 text-white/70">{f.text}</p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </div>
+    </section>
+  );
+}
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
-        <div key={active} className="fade-up grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-          {items.map((p) => (
-            <article key={p.id} className="group bg-white rounded-3xl border border-sara-black/5 shadow-sm hover:shadow-xl transition overflow-hidden flex flex-col">
-              <div className="relative aspect-4-3 overflow-hidden">
-                <Img src={p.image} emoji={EMOJI[p.category]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              </div>
-              <div className="p-2.5 sm:p-3 flex flex-col flex-1">
-                <div className="flex items-center gap-1 mb-1"><Star className="w-3.5 h-3.5 fill-sara-yellow text-sara-yellow" /><span className="text-xs font-bold text-sara-black">{p.rating}</span></div>
-                <h3 className="font-bold text-xs sm:text-sm text-sara-black leading-tight">{p.name}</h3>
-                <p className="mt-0.5 text-[11px] text-sara-black/60 clamp-2 leading-snug flex-1">{p.description}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="font-display font-extrabold text-sm sm:text-base text-sara-black whitespace-nowrap">{chf(p.price)}</span>
-                  <button onClick={() => addItem(p)} className={`inline-flex items-center gap-1 px-2 sm:px-2.5 h-8 sm:h-9 rounded-lg bg-sara-red text-white text-xs font-semibold glow-red hover:bg-sara-red-dark active:scale-95 transition ${flash === p.id ? 'scale-105' : ''}`}>
-                    <Plus className="w-3.5 h-3.5" /> Ajouter
-                  </button>
+/* ------------------------------------------------------------------ */
+/*  Catering                                                           */
+/* ------------------------------------------------------------------ */
+
+function Catering() {
+  return (
+    <section id="catering" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-12">
+          <div>
+            <Eyebrow>Traiteur</Eyebrow>
+            <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Un traiteur pour<br />chaque célébration</h2>
+          </div>
+          <div className="max-w-sm md:text-right">
+            <p className="text-sara-muted">
+              Du repas intime au grand événement, nous offrons des expériences culinaires
+              d'exception qui laissent un souvenir durable.
+            </p>
+            <PillLink href="#menu" className="mt-6">Explorer le menu</PillLink>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {CATERING.slice(0, 2).map((d, i) => (
+            <Reveal key={d.name} delay={i * 100}><CateringCard dish={d} /></Reveal>
+          ))}
+          <Reveal delay={150} className="md:col-span-2 md:max-w-[calc(50%-0.75rem)]">
+            <CateringCard dish={CATERING[2]} />
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CateringCard({ dish }) {
+  return (
+    <article className="relative rounded-3xl overflow-hidden aspect-4-3">
+      <Img src={dish.image} emoji={dish.emoji} alt={dish.name} className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-sara-ink/90 via-sara-ink/25 to-transparent" />
+      <span className="absolute top-0 left-6 px-5 py-2 bg-sara-cream text-sara-red font-semibold rounded-b-2xl">{dish.label}</span>
+      <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+        <h3 className="heading text-2xl">{dish.name}</h3>
+        <p className="mt-2 text-white/80 clamp-2">{dish.description}</p>
+      </div>
+    </article>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Testimonials — carrousel                                          */
+/* ------------------------------------------------------------------ */
+
+function Testimonials() {
+  const [i, setI] = useState(0);
+  const n = REVIEWS.length;
+  const next = useCallback(() => setI((p) => (p + 1) % n), [n]);
+  const prev = () => setI((p) => (p - 1 + n) % n);
+  useEffect(() => { const t = setInterval(next, 6000); return () => clearInterval(t); }, [next]);
+  const r = REVIEWS[i];
+
+  return (
+    <section id="avis" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8">
+        <div className="rounded-3xl bg-sara-red text-white p-6 sm:p-10 md:p-14">
+          <div className="grid md:grid-cols-2 gap-10 items-center">
+            <div className="rounded-3xl bg-sara-orange aspect-square overflow-hidden">
+              <Img src={null} emoji="👨‍🍳" alt={`Portrait — ${r.name}`} className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Eyebrow className="text-white">Témoignages</Eyebrow>
+                  <h2 className="heading text-white text-3xl sm:text-4xl mt-3">Ce que disent nos clients</h2>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={prev} className="w-11 h-11 rounded-xl bg-white text-sara-red flex items-center justify-center hover:bg-sara-creamSoft transition" aria-label="Précédent"><ChevronLeft className="w-5 h-5" /></button>
+                  <button onClick={next} className="w-11 h-11 rounded-xl bg-white text-sara-red flex items-center justify-center hover:bg-sara-creamSoft transition" aria-label="Suivant"><ChevronRight className="w-5 h-5" /></button>
                 </div>
               </div>
-            </article>
-          ))}
+              <Quote className="w-10 h-10 text-sara-orange mt-6 fill-sara-orange" />
+              <p key={i} className="fade-in mt-4 text-lg sm:text-xl text-white/90 leading-relaxed">« {r.comment} »</p>
+              <p className="mt-6 font-semibold">{r.name} <span className="text-white/60 font-normal">· {r.role}</span></p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  ChichaReservation                                                  */
+/*  FAQ — accordéon                                                    */
 /* ------------------------------------------------------------------ */
 
-const FLAVORS = ['Menthe fraîche', 'Pomme double', 'Fraise', 'Raisin', 'Pastèque', 'Bubble Gum'];
-const DRINKS = PRODUCTS.filter((p) => p.category === 'boissons');
-const FOOD = PRODUCTS.filter((p) => ['kebabs', 'assiettes', 'menus'].includes(p.category));
-
-function Chip({ active, onClick, children }) {
+function FaqSection() {
+  const [open, setOpen] = useState(0);
   return (
-    <button onClick={onClick} className={`px-3.5 py-2 rounded-xl text-sm font-semibold border transition ${active ? 'bg-sara-red text-white border-sara-red' : 'bg-white text-sara-black/70 border-sara-black/10 hover:border-sara-red/40'}`}>
-      {children}
-    </button>
-  );
-}
+    <section id="faq" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 grid md:grid-cols-[minmax(0,22rem)_1fr] gap-10 md:gap-16">
+        <div>
+          <Eyebrow>FAQ</Eyebrow>
+          <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Questions fréquentes</h2>
+          <p className="mt-4 text-sara-muted">
+            Des questions ? Nous avons les réponses pour profiter de votre expérience
+            simplement, rapidement et en toute sérénité.
+          </p>
+        </div>
 
-function ChichaReservation() {
-  const [flavor, setFlavor] = useState(FLAVORS[0]);
-  const [count, setCount] = useState(1);
-  const [added, setAdded] = useState({ drinks: [], food: [] });
-  const [done, setDone] = useState(false);
-
-  const toggle = (group, item) => {
-    setAdded((prev) => {
-      const exists = prev[group].find((x) => x.id === item.id);
-      return { ...prev, [group]: exists ? prev[group].filter((x) => x.id !== item.id) : [...prev[group], item] };
-    });
-  };
-
-  const extras = [...added.drinks, ...added.food].reduce((s, x) => s + x.price, 0);
-
-  return (
-    <section id="chicha" className="py-16 md:py-20 bg-sara-black text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid md:grid-cols-2 gap-10 items-center">
-          <Reveal>
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sara-red/20 text-sara-yellow text-sm font-semibold mb-4"><Wind className="w-4 h-4" /> Espace Chicha</span>
-            <h2 className="font-display font-extrabold text-3xl sm:text-4xl leading-tight">Réservez votre coin chicha</h2>
-            <p className="mt-4 text-white/70 leading-relaxed max-w-md">Chicha premium, parfums variés, ambiance cosy. Réservez juste une chicha ou une table avec repas — c'est vous qui choisissez.</p>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-xs font-semibold text-white/60 uppercase">Date</span>
-                <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5"><CalendarDays className="w-4 h-4 text-white/60" /><input type="date" className="w-full bg-transparent outline-none text-sm text-white" /></div>
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-white/60 uppercase">Heure</span>
-                <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5"><Clock className="w-4 h-4 text-white/60" /><select className="w-full bg-transparent outline-none text-sm text-white"><option className="text-sara-black">19:00</option><option className="text-sara-black">20:00</option><option className="text-sara-black">21:00</option><option className="text-sara-black">22:00</option></select></div>
-              </label>
-              <label className="block col-span-2">
-                <span className="text-xs font-semibold text-white/60 uppercase">Personnes</span>
-                <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5"><Users className="w-4 h-4 text-white/60" /><select className="w-full bg-transparent outline-none text-sm text-white"><option className="text-sara-black">1 personne</option><option className="text-sara-black">2 personnes</option><option className="text-sara-black">3 personnes</option><option className="text-sara-black">4 personnes ou plus</option></select></div>
-              </label>
+        <div>
+          {FAQ.map((item, idx) => (
+            <div key={item.q} className="border-b border-sara-brown/15">
+              <button onClick={() => setOpen(open === idx ? -1 : idx)} className="w-full flex items-center justify-between gap-4 py-6 text-left" aria-expanded={open === idx}>
+                <span className="heading text-sara-brown text-xl sm:text-2xl">{item.q}</span>
+                <ChevronDown className={`w-6 h-6 shrink-0 text-sara-brown transition-transform ${open === idx ? 'rotate-180' : ''}`} />
+              </button>
+              {open === idx && <p className="fade-in -mt-2 pb-6 text-sara-muted leading-relaxed max-w-2xl">{item.a}</p>}
             </div>
-
-            <div className="mt-5">
-              <span className="text-xs font-semibold text-white/60 uppercase">Parfum</span>
-              <div className="mt-2 flex flex-wrap gap-2">{FLAVORS.map((f) => <Chip key={f} active={flavor === f} onClick={() => setFlavor(f)}>{f}</Chip>)}</div>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
-              <span className="text-sm font-semibold">Nombre de chichas</span>
-              <div className="flex items-center gap-3">
-                <button onClick={() => setCount((c) => Math.max(1, c - 1))} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 font-bold" aria-label="Retirer une chicha">−</button>
-                <span className="w-6 text-center font-bold">{count}</span>
-                <button onClick={() => setCount((c) => c + 1)} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 font-bold" aria-label="Ajouter une chicha">+</button>
-              </div>
-            </div>
-
-            <button onClick={() => setDone(true)} className="mt-6 w-full inline-flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-sara-red text-white font-bold glow-red hover:bg-sara-red-dark active:scale-95 transition">
-              {done ? <Check className="w-5 h-5" /> : <Wind className="w-5 h-5" />}{done ? 'Réservation confirmée' : 'Réserver la chicha'}
-            </button>
-          </Reveal>
-
-          <Reveal delay={100} className="bg-white/5 rounded-3xl p-6 border border-white/10">
-            <h3 className="font-display font-bold text-xl mb-1">Complétez votre soirée</h3>
-            <p className="text-sm text-white/60 mb-5">Ajoutez boissons et nourriture à votre réservation.</p>
-
-            <p className="text-xs font-semibold text-white/60 uppercase mb-2">Boissons</p>
-            <div className="grid grid-cols-2 gap-2 mb-5">
-              {DRINKS.map((d) => {
-                const on = added.drinks.find((x) => x.id === d.id);
-                return (
-                  <button key={d.id} onClick={() => toggle('drinks', d)} className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition ${on ? 'bg-sara-green/90 text-white' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}>
-                    <span className="truncate">{d.name}</span><Plus className={`w-4 h-4 shrink-0 transition ${on ? 'rotate-45' : ''}`} />
-                  </button>
-                );
-              })}
-            </div>
-
-            <p className="text-xs font-semibold text-white/60 uppercase mb-2">Nourriture</p>
-            <div className="grid grid-cols-2 gap-2 mb-5">
-              {FOOD.map((d) => {
-                const on = added.food.find((x) => x.id === d.id);
-                return (
-                  <button key={d.id} onClick={() => toggle('food', d)} className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition ${on ? 'bg-sara-green/90 text-white' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}>
-                    <span className="truncate">{d.name}</span><Plus className={`w-4 h-4 shrink-0 transition ${on ? 'rotate-45' : ''}`} />
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center justify-between border-t border-white/10 pt-4">
-              <span className="text-white/70 text-sm">Total estimé</span>
-              <span className="font-display font-extrabold text-2xl text-sara-yellow">{chf(15 * count + extras)}</span>
-            </div>
-          </Reveal>
+          ))}
         </div>
       </div>
     </section>
@@ -667,70 +628,67 @@ function ChichaReservation() {
 /*  Gallery                                                            */
 /* ------------------------------------------------------------------ */
 
-function Gallery() {
-  const [i, setI] = useState(0);
-  const n = GALLERY.length;
-  const next = useCallback(() => setI((p) => (p + 1) % n), [n]);
-  const prev = () => setI((p) => (p - 1 + n) % n);
-  useEffect(() => { const t = setInterval(next, 4000); return () => clearInterval(t); }, [next]);
-
+function GallerySection() {
   return (
-    <section className="py-16 md:py-20 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center max-w-2xl mx-auto mb-8">
-          <span className="text-sm font-bold text-sara-red uppercase tracking-wide">En images</span>
-          <h2 className="mt-1 font-display font-extrabold text-3xl sm:text-4xl text-sara-black">L'ambiance Sara</h2>
-        </div>
-        <div className="relative rounded-3xl overflow-hidden shadow-xl">
-          <div className="aspect-16-9 sm:aspect-21-9">
-            <Img key={i} src={GALLERY[i].src} emoji={GALLERY[i].emoji} alt={GALLERY[i].alt} className="fade-in w-full h-full object-cover" />
-          </div>
-          <button onClick={prev} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:bg-white" aria-label="Précédent"><ChevronLeft className="w-5 h-5 text-sara-black" /></button>
-          <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:bg-white" aria-label="Suivant"><ChevronRight className="w-5 h-5 text-sara-black" /></button>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            {GALLERY.map((_, idx) => <button key={idx} onClick={() => setI(idx)} className={`h-2 rounded-full transition-all ${idx === i ? 'w-6 bg-sara-red' : 'w-2 bg-white/90'}`} aria-label={`Image ${idx + 1}`} />)}
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-6 gap-3">
-          {GALLERY.map((g, idx) => (
-            <button key={idx} onClick={() => setI(idx)} className={`aspect-square rounded-xl overflow-hidden border-2 transition ${idx === i ? 'border-sara-red' : 'border-transparent opacity-70 hover:opacity-100'}`}>
-              <Img src={g.src} emoji={g.emoji} alt={g.alt} className="w-full h-full object-cover" />
-            </button>
-          ))}
-        </div>
+    <section id="galerie" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-3xl mx-auto px-5 text-center mb-12">
+        <Eyebrow>Galerie</Eyebrow>
+        <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Un régal pour les yeux</h2>
+        <p className="mt-4 text-sara-muted">
+          Explorez nos créations — préparées avec passion et servies avec soin, pour une
+          qualité, une fraîcheur et une expérience inoubliables.
+        </p>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 grid grid-cols-2 md:grid-cols-3 gap-4 auto-rows-[10rem] sm:auto-rows-[13rem]">
+        {GALLERY.map((g, idx) => (
+          <Reveal key={idx} delay={idx * 60} className={g.span === 'row' ? 'row-span-2' : ''}>
+            <div className="w-full h-full rounded-3xl overflow-hidden group">
+              <Img src={g.src} emoji={g.emoji} alt={g.alt} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            </div>
+          </Reveal>
+        ))}
       </div>
     </section>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Reviews                                                            */
+/*  Blog                                                               */
 /* ------------------------------------------------------------------ */
 
-function Reviews() {
-  const avg = (REVIEWS.reduce((s, r) => s + r.rating, 0) / REVIEWS.length).toFixed(1);
+function Blog() {
   return (
-    <section className="py-16 md:py-20 bg-sara-cream">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <span className="text-sm font-bold text-sara-red uppercase tracking-wide">Avis clients</span>
-          <h2 className="mt-1 font-display font-extrabold text-3xl sm:text-4xl text-sara-black">Ils reviennent chez Sara</h2>
-          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white shadow-sm">
-            <Star className="w-5 h-5 fill-sara-yellow text-sara-yellow" />
-            <span className="font-bold text-sara-black">{avg} / 5</span>
-            <span className="text-sara-black/50 text-sm">· 1200+ avis</span>
+    <section id="blog" className="py-16 md:py-24 bg-sara-cream">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-12">
+          <div>
+            <Eyebrow>Blog</Eyebrow>
+            <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Tendances &<br />histoires gourmandes</h2>
+          </div>
+          <div className="max-w-sm md:text-right">
+            <p className="text-sara-muted">
+              Découvrez les dernières tendances food, recettes et coulisses de notre cuisine,
+              de nos chefs et de notre aventure culinaire.
+            </p>
+            <PillLink href="#blog" className="mt-6">Explorer le blog</PillLink>
           </div>
         </div>
-        <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-          {REVIEWS.map((r, i) => (
-            <Reveal key={r.name} delay={i * 80}>
-              <article className="h-full bg-white rounded-3xl p-6 shadow-sm border border-sara-black/5">
-                <Quote className="w-6 h-6 text-sara-red/20 mb-3" />
-                <div className="flex gap-0.5 mb-3">{Array.from({ length: 5 }).map((_, s) => <Star key={s} className={`w-4 h-4 ${s < r.rating ? 'fill-sara-yellow text-sara-yellow' : 'text-sara-black/15'}`} />)}</div>
-                <p className="text-sm text-sara-black/80 leading-relaxed">{r.comment}</p>
-                <div className="mt-4 flex items-center gap-3">
-                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-sara-red/10 text-sara-red font-bold text-sm">{r.name.charAt(0)}</span>
-                  <span className="font-semibold text-sara-black text-sm">{r.name}</span>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {POSTS.map((p, i) => (
+            <Reveal key={p.title} delay={i * 100}>
+              <article className="bg-white rounded-3xl p-4 sm:p-5">
+                <div className="aspect-4-3 rounded-2xl overflow-hidden">
+                  <Img src={p.image} emoji={p.emoji} alt={p.title} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex items-center justify-between mt-4 text-sm font-medium text-sara-red">
+                  <span>Lecture : {p.read}</span>
+                  <span>{p.date}</span>
+                </div>
+                <h3 className="heading text-sara-brown text-2xl mt-3">{p.title}</h3>
+                <div className="mt-5">
+                  <PillLink href="#blog">Lire l'article</PillLink>
                 </div>
               </article>
             </Reveal>
@@ -742,166 +700,79 @@ function Reviews() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Footer                                                             */
+/*  CTA + Footer                                                       */
 /* ------------------------------------------------------------------ */
 
-function Footer() {
+function CtaFooter() {
   return (
-    <footer id="contact" className="bg-sara-black text-white">
-      <div id="promos" className="border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="px-2.5 py-1 rounded-full bg-sara-yellow text-sara-black text-xs font-bold">Promos</span>
-            <h3 className="font-display font-bold text-lg">Offres du moment</h3>
-          </div>
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {OFFERS.map((o) => <div key={o} className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm font-semibold">{o}</div>)}
+    <footer id="contact" className="bg-sara-red text-white">
+      {/* bandeau CTA jaune */}
+      <div className="relative overflow-hidden bg-sara-orange">
+        <span className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 w-40 sm:w-56 opacity-95" aria-hidden="true">
+          <Img src={IMG.broche} emoji="🍗" alt="" className="w-full object-contain drop-shadow-xl" />
+        </span>
+        <span className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-40 sm:w-56 opacity-95" aria-hidden="true">
+          <Img src={IMG.assietteAlt} emoji="🍕" alt="" className="w-full object-contain drop-shadow-xl" />
+        </span>
+        <div className="max-w-2xl mx-auto px-5 text-center py-16 md:py-24 relative">
+          <h2 className="heading text-sara-redDark text-4xl sm:text-5xl">Un petit creux ?<br />On vous attend</h2>
+          <p className="mt-4 text-sara-redDark/80 font-medium">
+            Commandez vos plats préférés et profitez d'une cuisine fraîche et savoureuse,
+            livrée rapidement jusqu'à votre porte.
+          </p>
+          <div className="mt-8 flex justify-center">
+            <PillLink href="#menu" variant="dark">Commander maintenant</PillLink>
           </div>
         </div>
+        <Wave fill="#A51E22" />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-        <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8">
+      {/* footer principal */}
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-16">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-sara-red text-white font-display font-extrabold text-xl">S</span>
-              <span className="font-display font-extrabold text-2xl">Sara</span>
-            </div>
-            <p className="text-sm text-white/60 leading-relaxed">Kebabs, burgers, tacos, assiettes et espace chicha. Le goût qui donne envie de revenir.</p>
+            <span className="sara-wordmark sara-wordmark--footer">Sara</span>
+            <h4 className="heading text-lg mt-8">Adresse</h4>
+            <p className="mt-3 text-white/80 leading-relaxed flex items-start gap-2">
+              <MapPin className="w-4 h-4 mt-1 shrink-0 text-sara-orange" />{INFO.address}
+            </p>
+            <p className="mt-3 text-white/80 flex items-center gap-2">
+              <Phone className="w-4 h-4 shrink-0 text-sara-orange" />
+              <a href={`tel:${INFO.phone.replace(/\s/g, '')}`} className="hover:text-white">{INFO.phone}</a>
+            </p>
           </div>
-          <div>
-            <h4 className="font-bold mb-4 text-sm uppercase tracking-wide text-white/60">Contact</h4>
-            <ul className="space-y-3 text-sm">
-              <li className="flex items-start gap-2 text-white/80"><MapPin className="w-4 h-4 mt-0.5 shrink-0 text-sara-red" />12 rue des Lilas, 69001 Lyon</li>
-              <li className="flex items-center gap-2 text-white/80"><Phone className="w-4 h-4 shrink-0 text-sara-red" /><a href="tel:+33400000000" className="hover:text-white">04 00 00 00 00</a></li>
-              <li className="flex items-start gap-2 text-white/80"><Clock className="w-4 h-4 mt-0.5 shrink-0 text-sara-red" />Lun–Jeu : 11h–23h<br />Ven–Sam : 11h–01h · Dim : 16h–23h</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold mb-4 text-sm uppercase tracking-wide text-white/60">Navigation</h4>
-            <ul className="space-y-2 text-sm">
-              {[['#menu', 'Menu'], ['#commander', 'Commander'], ['#reserver', 'Réserver'], ['#chicha', 'Chicha'], ['#promos', 'Promotions']].map(([h, l]) => (
-                <li key={h}><a href={h} className="text-white/80 hover:text-white">{l}</a></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold mb-4 text-sm uppercase tracking-wide text-white/60">Suivez-nous</h4>
-            <div className="flex gap-3">
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/10 hover:bg-sara-red flex items-center justify-center transition" aria-label="Instagram"><Instagram className="w-5 h-5" /></a>
-              <a href="https://tiktok.com" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/10 hover:bg-sara-red flex items-center justify-center font-bold text-sm transition" aria-label="TikTok">TT</a>
-              <a href="https://facebook.com" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/10 hover:bg-sara-red flex items-center justify-center transition" aria-label="Facebook"><Facebook className="w-5 h-5" /></a>
-            </div>
-            <a href="https://maps.google.com/?q=12+rue+des+Lilas+Lyon" target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sara-red text-white text-sm font-semibold hover:bg-sara-red-dark transition">
-              <MapPin className="w-4 h-4" /> Voir sur Google Maps
-            </a>
-          </div>
+
+          <FooterCol title="Menu" links={[['#menu', 'Menu'], ['#offres', 'Offres'], ['#categories', 'Catégories']]} />
+          <FooterCol title="Restaurant" links={[['#about', 'À propos'], ['#catering', 'Traiteur'], ['#galerie', 'Galerie']]} />
+          <FooterCol title="Aide" links={[['#faq', 'FAQ'], ['#contact', 'Contact']]} />
+          <FooterCol title="Légal" links={[['#', 'Confidentialité'], ['#', 'Conditions']]} />
         </div>
-        <div className="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/50">
-          <p>© {new Date().getFullYear()} Sara. Tous droits réservés.</p>
-          <div className="flex gap-4"><a href="#" className="hover:text-white">Mentions légales</a><a href="#" className="hover:text-white">CGV</a><a href="#" className="hover:text-white">Confidentialité</a></div>
+
+        <div className="mt-12 pt-6 border-t border-white/15 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-white/60">
+          <p>© {new Date().getFullYear()} {INFO.name}. Tous droits réservés.</p>
+          <div className="flex gap-3">
+            {[Youtube, Twitter, Instagram, Linkedin].map((I, k) => (
+              <a key={k} href="#" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition" aria-label="Réseau social">
+                <I className="w-4 h-4" />
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </footer>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  CartDrawer                                                         */
-/* ------------------------------------------------------------------ */
-
-const FREE_DELIVERY_THRESHOLD = 20;
-const DELIVERY_FEE = 2.9;
-
-function CartDrawer() {
-  const { items, open, setOpen, setQty, removeItem, total, count, clear } = useCart();
-  if (!open) return null;
-
-  const remaining = Math.max(0, FREE_DELIVERY_THRESHOLD - total);
-  const delivery = total >= FREE_DELIVERY_THRESHOLD || total === 0 ? 0 : DELIVERY_FEE;
-  const grandTotal = total + delivery;
-
+function FooterCol({ title, links }) {
   return (
-    <div className="fixed inset-0 z-60">
-      <div className="absolute inset-0 bg-sara-black/50 backdrop-blur-sm fade-in" onClick={() => setOpen(false)} />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col fade-in">
-        <div className="flex items-center justify-between p-5 border-b border-sara-black/5">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-sara-red" />
-            <h2 className="font-display font-bold text-lg text-sara-black">Mon panier</h2>
-            {count > 0 && <span className="px-2 py-0.5 rounded-full bg-sara-red/10 text-sara-red text-xs font-bold">{count}</span>}
-          </div>
-          <button onClick={() => setOpen(false)} aria-label="Fermer le panier"><X className="w-6 h-6 text-sara-black" /></button>
-        </div>
-
-        {items.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-            <span className="w-16 h-16 rounded-full bg-sara-cream flex items-center justify-center mb-4"><ShoppingBag className="w-8 h-8 text-sara-black/30" /></span>
-            <p className="font-semibold text-sara-black">Votre panier est vide</p>
-            <p className="text-sm text-sara-black/50 mt-1">Ajoutez vos plats préférés du menu.</p>
-            <button onClick={() => setOpen(false)} className="mt-5 px-5 py-2.5 rounded-xl bg-sara-red text-white font-semibold text-sm hover:bg-sara-red-dark transition">Voir le menu</button>
-          </div>
-        ) : (
-          <>
-            <div className="px-5 py-3 bg-sara-cream border-b border-sara-black/5">
-              {remaining > 0
-                ? <p className="text-xs text-sara-black/70">Plus que <span className="font-bold text-sara-red">{chf(remaining)}</span> pour la livraison offerte 🚚</p>
-                : <p className="text-xs font-bold text-sara-green">🎉 Livraison offerte débloquée !</p>}
-              <div className="mt-2 h-1.5 rounded-full bg-sara-black/10 overflow-hidden">
-                <div className="h-full bg-sara-green transition-all duration-500" style={{ width: `${Math.min(100, (total / FREE_DELIVERY_THRESHOLD) * 100)}%` }} />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              {items.map((it) => (
-                <div key={it.id} className="flex gap-3 rounded-2xl border border-sara-black/5 p-2">
-                  <Img src={it.image} emoji={EMOJI[it.category]} alt={it.name} className="w-16 h-16 rounded-xl object-cover shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-sara-black truncate">{it.name}</p>
-                    <p className="text-sm font-bold text-sara-red">{chf(it.price)}</p>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <button onClick={() => setQty(it.id, it.qty - 1)} className="w-7 h-7 rounded-lg bg-sara-cream hover:bg-sara-black/10 flex items-center justify-center" aria-label="Diminuer"><Minus className="w-3.5 h-3.5" /></button>
-                      <span className="w-5 text-center text-sm font-bold">{it.qty}</span>
-                      <button onClick={() => setQty(it.id, it.qty + 1)} className="w-7 h-7 rounded-lg bg-sara-cream hover:bg-sara-black/10 flex items-center justify-center" aria-label="Augmenter"><Plus className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => removeItem(it.id)} className="ml-auto w-7 h-7 rounded-lg text-sara-black/40 hover:text-sara-red flex items-center justify-center" aria-label="Retirer"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                  <span className="font-bold text-sm text-sara-black self-center">{chf(it.price * it.qty)}</span>
-                </div>
-              ))}
-              <button onClick={clear} className="text-xs text-sara-black/40 hover:text-sara-red font-medium">Vider le panier</button>
-            </div>
-
-            <div className="p-5 border-t border-sara-black/5 space-y-2">
-              <div className="flex justify-between text-sm text-sara-black/70"><span>Sous-total</span><span>{chf(total)}</span></div>
-              <div className="flex justify-between text-sm text-sara-black/70"><span>Livraison</span><span>{delivery === 0 ? 'Offerte' : chf(delivery)}</span></div>
-              <div className="flex justify-between font-display font-extrabold text-lg text-sara-black pt-2 border-t border-sara-black/5"><span>Total</span><span>{chf(grandTotal)}</span></div>
-              <button className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-sara-green text-white font-bold glow-green hover:opacity-90 active:scale-95 transition">
-                <Bike className="w-5 h-5" /> Payer en ligne
-              </button>
-            </div>
-          </>
-        )}
-      </aside>
+    <div>
+      <h4 className="heading text-lg text-sara-orange">{title}</h4>
+      <ul className="mt-4 space-y-3">
+        {links.map(([h, l]) => (
+          <li key={l}><a href={h} className="text-white/80 hover:text-white transition">{l}</a></li>
+        ))}
+      </ul>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  StickyCartBar                                                      */
-/* ------------------------------------------------------------------ */
-
-function StickyCartBar() {
-  const { count, total, setOpen } = useCart();
-  if (count === 0) return null;
-  return (
-    <button onClick={() => setOpen(true)} className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-cart-bar max-w-md flex items-center justify-between gap-3 px-5 py-3.5 rounded-2xl bg-sara-red text-white glow-red-lg backdrop-blur md:hidden">
-      <span className="flex items-center gap-2 font-bold">
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white text-sara-red text-sm">{count}</span>
-        Voir le panier
-      </span>
-      <span className="font-display font-extrabold">{chf(total)}</span>
-    </button>
   );
 }
 
@@ -911,22 +782,23 @@ function StickyCartBar() {
 
 export default function SaraSite() {
   return (
-    <CartProvider>
-      <div className="sara-root min-h-screen bg-sara-cream">
-        <a href="#menu" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-70 focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-black focus:text-white">Aller au menu</a>
-        <Header />
-        <main>
-          <Hero />
-          <QuickOrder />
-          <MenuSection />
-          <ChichaReservation />
-          <Gallery />
-          <Reviews />
-        </main>
-        <Footer />
-        <CartDrawer />
-        <StickyCartBar />
-      </div>
-    </CartProvider>
+    <div className="sara-root min-h-screen">
+      <a href="#menu" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-70 focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-ink focus:text-white">Aller au menu</a>
+      <Header />
+      <main>
+        <Hero />
+        <Categories />
+        <SpecialOffers />
+        <DiscoverMenu />
+        <About />
+        <WhyChoose />
+        <Catering />
+        <Testimonials />
+        <FaqSection />
+        <GallerySection />
+        <Blog />
+      </main>
+      <CtaFooter />
+    </div>
   );
 }
