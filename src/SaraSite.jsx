@@ -37,6 +37,39 @@ const INFO = {
   hoursWeekend: 'Ven – Dim : 11h00 – 01h00',
 };
 
+const chf = (n) => {
+  const v = Math.round(n * 100) / 100;
+  return Number.isInteger(v) ? `${v}.- CHF` : `${v.toFixed(2)} CHF`;
+};
+
+/* Route de la page Menu (routage par hash) */
+const MENU_ROUTE = '#/carte';
+
+/* Filtres et produits de la page Menu — CONTENU PLACEHOLDER à personnaliser. */
+const MENU_CATS = [
+  { id: 'all', label: 'Tout' },
+  { id: 'kebabs', label: 'Kebabs' },
+  { id: 'burgers', label: 'Burgers' },
+  { id: 'tacos', label: 'Tacos' },
+  { id: 'assiettes', label: 'Assiettes' },
+  { id: 'menus', label: 'Menus' },
+  { id: 'boissons', label: 'Boissons' },
+  { id: 'desserts', label: 'Desserts' },
+];
+
+const MENU_PRODUCTS = [
+  { id: 'kebab', cat: 'kebabs', catLabel: 'Kebabs', name: 'Kebab Classique', price: 8.5, image: IMG.durum, emoji: '🌯', desc: 'Pain pita, viande grillée, crudités fraîches et sauce blanche maison.' },
+  { id: 'durum', cat: 'kebabs', catLabel: 'Kebabs', name: 'Durum Poulet', price: 9, image: IMG.tacosAlt, emoji: '🌯', desc: 'Galette roulée grillée, poulet mariné, frites et sauce samouraï.' },
+  { id: 'double', cat: 'burgers', catLabel: 'Burgers', name: 'Double Cheeseburger', price: 10.5, image: IMG.burger, emoji: '🍔', desc: 'Deux steaks, cheddar fondu, bacon croustillant et sauce maison.' },
+  { id: 'sara', cat: 'burgers', catLabel: 'Burgers', name: 'Burger Sara', price: 9.5, image: IMG.burgerAlt, emoji: '🍔', desc: 'Steak 150g, cheddar, oignons confits et sauce signature Sara.' },
+  { id: 'tacosxl', cat: 'tacos', catLabel: 'Tacos', name: 'Tacos XL', price: 9, image: IMG.tacos, emoji: '🌮', desc: 'Galette grillée, viande au choix, frites et sauce fromagère onctueuse.' },
+  { id: 'mixte', cat: 'assiettes', catLabel: 'Assiettes', name: 'Assiette Mixte', price: 13.5, image: IMG.assiette, emoji: '🍽️', desc: 'Brochettes de poulet et bœuf, riz safran, frites, salade et sauces.' },
+  { id: 'poulet', cat: 'assiettes', catLabel: 'Assiettes', name: 'Assiette Poulet', price: 11.5, image: IMG.assietteAlt, emoji: '🍽️', desc: 'Émincé de poulet grillé, frites maison, crudités et sauce blanche.' },
+  { id: 'etudiant', cat: 'menus', catLabel: 'Menus', name: 'Menu Étudiant', price: 9.9, image: IMG.plate, emoji: '🥡', desc: 'Kebab + frites + boisson au choix. Le meilleur rapport qualité-prix.' },
+  { id: 'soda', cat: 'boissons', catLabel: 'Boissons', name: 'Boisson 33cl', price: 2.5, image: IMG.drink, emoji: '🥤', desc: 'Coca, Fanta, Sprite, eau plate ou pétillante au choix.' },
+  { id: 'baklava', cat: 'desserts', catLabel: 'Desserts', name: 'Assortiment Baklava', price: 4.5, image: null, emoji: '🍰', desc: 'Pâtisseries orientales au miel et pistaches, fait maison.' },
+];
+
 const CATEGORIES = [
   { id: 'kebabs', label: 'Kebabs', image: IMG.durum, emoji: '🌯' },
   { id: 'burgers', label: 'Burgers', image: IMG.burger, emoji: '🍔' },
@@ -100,7 +133,7 @@ const GALLERY = [
 
 const NAV = [
   { href: '#accueil', label: 'Accueil' },
-  { href: '#menu', label: 'Menu' },
+  { href: '#/carte', label: 'Menu' },
   { href: '#chicha', label: 'Chicha' },
   { href: '#about', label: 'À propos' },
   { href: '#galerie', label: 'Galerie' },
@@ -154,7 +187,7 @@ function Reveal({ children, delay = 0, className = '', as: Tag = 'div', ...rest 
 }
 
 /* Bouton pilule façon FreshBox (coin haut-droit rogné) */
-function PillLink({ href = '#menu', children, variant = 'red', className = '' }) {
+function PillLink({ href = '#/carte', children, variant = 'red', className = '' }) {
   const styles = {
     red: 'bg-sara-red text-white hover:bg-sara-redDark',
     dark: 'bg-sara-redDark text-white hover:bg-sara-ink',
@@ -197,7 +230,7 @@ function Header() {
           </div>
           {/* Droite : panier + compte */}
           <div className="flex justify-end items-center gap-2 sm:gap-3">
-            <a href="#menu" className="sara-iconbtn" aria-label="Panier"><ShoppingBag className="w-5 h-5" /></a>
+            <a href="#/carte" className="sara-iconbtn" aria-label="Panier"><ShoppingBag className="w-5 h-5" /></a>
             <a href="#contact" className="sara-iconbtn" aria-label="Mon compte"><User className="w-5 h-5" /></a>
           </div>
         </div>
@@ -214,7 +247,7 @@ function Header() {
             {NAV.map((l) => (
               <a key={l.href} href={l.href} onClick={() => setMobile(false)} className="px-3 py-3 text-base font-semibold text-sara-brown hover:bg-sara-red/5 hover:text-sara-red rounded-xl transition">{l.label}</a>
             ))}
-            <PillLink href="#menu" className="mt-4 justify-center">Commander</PillLink>
+            <PillLink href="#/carte" className="mt-4 justify-center">Commander</PillLink>
           </div>
         </div>
       )}
@@ -259,8 +292,8 @@ function Hero() {
           </div>
 
           <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-            <PillLink href="#menu" variant="cream"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
-            <PillLink href="#menu" variant="dark">Voir le menu</PillLink>
+            <PillLink href="#/carte" variant="cream"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
+            <PillLink href="#/carte" variant="dark">Voir le menu</PillLink>
           </div>
 
           {/* points du carrousel */}
@@ -293,7 +326,7 @@ function Categories() {
       <div className="marquee">
         <div className="marquee__track">
           {loop.map((c, i) => (
-            <a key={`${c.id}-${i}`} href="#menu" className="shrink-0 w-44 sm:w-52 text-center group" aria-label={c.label}>
+            <a key={`${c.id}-${i}`} href="#/carte" className="shrink-0 w-44 sm:w-52 text-center group" aria-label={c.label}>
               <div className="aspect-square rounded-3xl overflow-hidden bg-sara-orange/15 p-3 transition group-hover:-translate-y-1">
                 <Img src={c.image} emoji={c.emoji} alt={c.label} className="w-full h-full object-contain drop-shadow-lg" />
               </div>
@@ -325,7 +358,7 @@ function OfferBanner({ offer }) {
           {offer.title}<br />{offer.subtitle}
         </h3>
         <div className="mt-3">
-          <a href="#menu" className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl rounded-tr-none bg-white text-sara-red text-sm font-semibold hover:bg-sara-creamSoft transition">
+          <a href="#/carte" className="group inline-flex items-center gap-1.5 px-4 py-2 rounded-xl rounded-tr-none bg-white text-sara-red text-sm font-semibold hover:bg-sara-creamSoft transition">
             <Flame className="w-4 h-4 text-sara-orange" /> Commander
             <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </a>
@@ -519,6 +552,68 @@ function GallerySection() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Page Menu (route #/carte)                                          */
+/* ------------------------------------------------------------------ */
+
+function MenuPage() {
+  const [active, setActive] = useState('all');
+  const shown = active === 'all' ? MENU_PRODUCTS : MENU_PRODUCTS.filter((p) => p.cat === active);
+
+  return (
+    <main className="bg-sara-cream">
+      <section className="max-w-7xl mx-auto px-5 sm:px-8 pt-12 md:pt-16">
+        <Eyebrow>Commandez · Savourez · Recommencez</Eyebrow>
+        <h1 className="heading text-sara-brown text-5xl sm:text-6xl md:text-7xl mt-3">Notre carte</h1>
+      </section>
+
+      <div className="checker my-8 md:my-12" aria-hidden="true" />
+
+      <section className="max-w-7xl mx-auto px-5 sm:px-8 pb-20 md:pb-28">
+        {/* Filtres par catégorie */}
+        <div className="flex flex-wrap gap-2 sm:gap-3 mb-10">
+          {MENU_CATS.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setActive(c.id)}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold uppercase tracking-wide transition ${active === c.id ? 'bg-sara-red text-white' : 'bg-white text-sara-brown border border-sara-brown/15 hover:border-sara-red/40'}`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Grille produits */}
+        <div key={active} className="fade-up grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {shown.map((p) => (
+            <article key={p.id} className="rounded-3xl overflow-hidden bg-white shadow-sm flex flex-col">
+              <div className="aspect-4-3 bg-sara-ink">
+                <Img src={p.image} emoji={p.emoji} alt={p.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="p-5 sm:p-6 flex flex-col flex-1">
+                <span className="self-start px-3 py-1 rounded-full bg-sara-brown/10 text-sara-brown/70 text-[11px] font-bold uppercase tracking-wide">{p.catLabel}</span>
+                <h3 className="heading text-sara-brown text-2xl mt-3">{p.name}</h3>
+                <p className="mt-2 text-sara-muted clamp-2 leading-relaxed">{p.desc}</p>
+                <div className="mt-auto pt-5">
+                  <button type="button" className="block w-full text-center px-4 py-3 rounded-full border border-sara-brown/20 text-sara-brown text-xs font-bold uppercase tracking-widest hover:border-sara-red hover:text-sara-red transition">
+                    Voir le produit
+                  </button>
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="font-display text-2xl text-sara-brown">{chf(p.price)}</span>
+                    <button type="button" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-sara-red text-white text-xs font-bold uppercase tracking-widest hover:bg-sara-redDark transition">
+                      <Flame className="w-4 h-4" /> Commander
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  CTA + Footer                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -540,7 +635,7 @@ function CtaFooter() {
             livrée rapidement jusqu'à votre porte.
           </p>
           <div className="mt-8 flex justify-center">
-            <PillLink href="#menu" variant="dark">Commander maintenant</PillLink>
+            <PillLink href="#/carte" variant="dark">Commander maintenant</PillLink>
           </div>
         </div>
         <Wave fill="#A51E22" />
@@ -561,7 +656,7 @@ function CtaFooter() {
             </p>
           </div>
 
-          <FooterCol title="Menu" links={[['#menu', 'Menu'], ['#offres', 'Offres'], ['#chicha', 'Chicha']]} />
+          <FooterCol title="Menu" links={[['#/carte', 'Menu'], ['#offres', 'Offres'], ['#chicha', 'Chicha']]} />
           <FooterCol title="Restaurant" links={[['#about', 'À propos'], ['#chicha', 'Chicha'], ['#galerie', 'Galerie']]} />
           <FooterCol title="Aide" links={[['#faq', 'FAQ'], ['#contact', 'Contact']]} />
           <FooterCol title="Légal" links={[['#', 'Confidentialité'], ['#', 'Conditions']]} />
@@ -596,23 +691,50 @@ function FooterCol({ title, links }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Routage par hash                                                   */
+/* ------------------------------------------------------------------ */
+
+function useHashRoute() {
+  const [hash, setHash] = useState(typeof window !== 'undefined' ? window.location.hash : '');
+  useEffect(() => {
+    const on = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  return hash;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 
 export default function SaraSite() {
+  const hash = useHashRoute();
+  const isMenu = hash.startsWith(MENU_ROUTE);
+
+  useEffect(() => {
+    if (isMenu) { window.scrollTo(0, 0); return; }
+    const id = hash.replace(/^#\/?/, '');
+    if (id) { const el = document.getElementById(id); if (el) el.scrollIntoView(); }
+  }, [hash, isMenu]);
+
   return (
     <div className="sara-root min-h-screen">
-      <a href="#menu" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-70 focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-ink focus:text-white">Aller au menu</a>
+      <a href={MENU_ROUTE} className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-70 focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-ink focus:text-white">Aller au menu</a>
       <Header />
-      <main>
-        <Hero />
-        <Categories />
-        <SpecialOffers />
-        <Chicha />
-        <About />
-        <GallerySection />
-        <FaqSection />
-      </main>
+      {isMenu ? (
+        <MenuPage />
+      ) : (
+        <main>
+          <Hero />
+          <Categories />
+          <SpecialOffers />
+          <Chicha />
+          <About />
+          <GallerySection />
+          <FaqSection />
+        </main>
+      )}
       <CtaFooter />
     </div>
   );

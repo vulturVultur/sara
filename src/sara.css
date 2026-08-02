@@ -108,6 +108,13 @@
 }
 @media (min-width: 768px) { .sara-wave { height: 96px; } }
 
+/* Bandeau damier rouge/crème (page Menu) */
+.checker {
+  height: 3rem;
+  background: repeating-conic-gradient(#C0201F 0 25%, #FBEFD5 0 50%) 0 0 / 3rem 3rem;
+}
+@media (min-width: 768px) { .checker { height: 3.5rem; background-size: 3.5rem 3.5rem; } }
+
 /* Arche (About) : haut arrondi, bas droit */
 .sara-arch {
   border-radius: 46% 46% 8% 8% / 34% 34% 6% 6%;
