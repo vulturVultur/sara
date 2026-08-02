@@ -50,7 +50,6 @@ const CATEGORIES = [
   { id: 'menus', label: 'Menus', image: IMG.plate, emoji: '🥡' },
   { id: 'boissons', label: 'Boissons', image: IMG.drink, emoji: '🥤' },
   { id: 'desserts', label: 'Desserts', image: null, emoji: '🍰' },
-  { id: 'chichas', label: 'Chichas', image: IMG.chicha, emoji: '💨' },
 ];
 
 /* Plats affichés dans le carrousel hero (le plat central défile). */
@@ -316,10 +315,6 @@ function Categories() {
       <div className="max-w-3xl mx-auto px-5 text-center mb-12">
         <Eyebrow>Catégories</Eyebrow>
         <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Découvrez nos plats populaires</h2>
-        <p className="mt-4 text-sara-muted">
-          Une variété de plats préparés minute, pensés pour satisfaire toutes les envies —
-          saveurs riches, ingrédients premium et plaisir garanti pour tous.
-        </p>
       </div>
 
       <div className="marquee">

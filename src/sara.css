@@ -68,15 +68,15 @@
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 1rem;
-  background: #A51E22;
-  color: #fff;
+  background: #fff;
+  color: #40241A;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12px 26px -12px rgba(165, 30, 34, .7);
-  transition: transform .15s ease, background .15s ease;
+  box-shadow: 0 8px 20px -12px rgba(31, 31, 31, .5);
+  transition: transform .15s ease, background .15s ease, color .15s ease;
 }
-.sara-burger:hover { background: #7E1518; }
+.sara-burger:hover { background: #A51E22; color: #fff; }
 .sara-burger:active { transform: scale(.94); }
 
 /* Boutons icônes (panier / compte) à droite de l'en-tête */
