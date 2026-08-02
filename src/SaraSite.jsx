@@ -369,7 +369,7 @@ function OfferCard({ offer, large = false }) {
 
 function SpecialOffers() {
   return (
-    <section id="offres" className="py-16 md:py-24 bg-sara-cream">
+    <section id="offres" className="relative overflow-hidden bg-sara-cream pt-16 md:pt-24 pb-28 md:pb-44">
       <div className="max-w-3xl mx-auto px-5 text-center mb-12">
         <Eyebrow>Offres spéciales</Eyebrow>
         <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Des offres à ne pas manquer</h2>
@@ -386,13 +386,12 @@ function SpecialOffers() {
         </div>
         <Reveal delay={150}><OfferCard offer={OFFERS[2]} large /></Reveal>
       </div>
+
+      {/* vague de raccord vers la section Chicha (fond sombre) */}
+      <Wave fill="#2A1712" />
     </section>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Our Menu — Discover Flavors                                        */
-/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /*  Chicha — carrousel du salon                                        */
