@@ -6,6 +6,7 @@ import {
   MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
   ShoppingBag, User,
 } from 'lucide-react';
+import { MENU_CATEGORIES, MENU_ITEMS, categoryLabel, formatChf } from './data/menuItems';
 
 /* ------------------------------------------------------------------ */
 /*  Données                                                            */
@@ -58,48 +59,12 @@ const INFO = {
   hoursWeekend: 'Ven – Dim : 11h00 – 01h00',
 };
 
-const chf = (n) => {
-  const v = Math.round(n * 100) / 100;
-  return Number.isInteger(v) ? `${v}.- CHF` : `${v.toFixed(2)} CHF`;
-};
-
 /* Route de la page Menu (routage par hash) */
 const MENU_ROUTE = '#/carte';
 
-/* Filtres et produits de la page Menu — CONTENU PLACEHOLDER à personnaliser. */
-const MENU_CATS = [
-  { id: 'all', label: 'Tout' },
-  { id: 'kebabs', label: 'Kebabs' },
-  { id: 'burgers', label: 'Burgers' },
-  { id: 'tacos', label: 'Tacos' },
-  { id: 'assiettes', label: 'Assiettes' },
-  { id: 'menus', label: 'Menus' },
-  { id: 'boissons', label: 'Boissons' },
-  { id: 'desserts', label: 'Desserts' },
-];
-
-const MENU_PRODUCTS = [
-  { id: 'kebab', cat: 'kebabs', catLabel: 'Kebabs', name: 'Kebab Classique', price: 8.5, image: IMG.durum, emoji: '🌯', desc: 'Pain pita, viande grillée, crudités fraîches et sauce blanche maison.' },
-  { id: 'durum', cat: 'kebabs', catLabel: 'Kebabs', name: 'Durum Poulet', price: 9, image: IMG.tacosAlt, emoji: '🌯', desc: 'Galette roulée grillée, poulet mariné, frites et sauce samouraï.' },
-  { id: 'double', cat: 'burgers', catLabel: 'Burgers', name: 'Double Cheeseburger', price: 10.5, image: IMG.burger, emoji: '🍔', desc: 'Deux steaks, cheddar fondu, bacon croustillant et sauce maison.' },
-  { id: 'sara', cat: 'burgers', catLabel: 'Burgers', name: 'Burger Sara', price: 9.5, image: IMG.burgerAlt, emoji: '🍔', desc: 'Steak 150g, cheddar, oignons confits et sauce signature Sara.' },
-  { id: 'tacosxl', cat: 'tacos', catLabel: 'Tacos', name: 'Tacos XL', price: 9, image: IMG.tacos, emoji: '🌮', desc: 'Galette grillée, viande au choix, frites et sauce fromagère onctueuse.' },
-  { id: 'mixte', cat: 'assiettes', catLabel: 'Assiettes', name: 'Assiette Mixte', price: 13.5, image: IMG.assiette, emoji: '🍽️', desc: 'Brochettes de poulet et bœuf, riz safran, frites, salade et sauces.' },
-  { id: 'poulet', cat: 'assiettes', catLabel: 'Assiettes', name: 'Assiette Poulet', price: 11.5, image: IMG.assietteAlt, emoji: '🍽️', desc: 'Émincé de poulet grillé, frites maison, crudités et sauce blanche.' },
-  { id: 'etudiant', cat: 'menus', catLabel: 'Menus', name: 'Menu Étudiant', price: 9.9, image: IMG.plate, emoji: '🥡', desc: 'Kebab + frites + boisson au choix. Le meilleur rapport qualité-prix.' },
-  { id: 'soda', cat: 'boissons', catLabel: 'Boissons', name: 'Boisson 33cl', price: 2.5, image: IMG.drink, emoji: '🥤', desc: 'Coca, Fanta, Sprite, eau plate ou pétillante au choix.' },
-  { id: 'baklava', cat: 'desserts', catLabel: 'Desserts', name: 'Assortiment Baklava', price: 4.5, image: null, emoji: '🍰', desc: 'Pâtisseries orientales au miel et pistaches, fait maison.' },
-];
-
-const CATEGORIES = [
-  { id: 'kebabs', label: 'Kebabs', image: IMG.durum, emoji: '🌯' },
-  { id: 'burgers', label: 'Burgers', image: IMG.burger, emoji: '🍔' },
-  { id: 'tacos', label: 'Tacos', image: IMG.tacos, emoji: '🌮' },
-  { id: 'assiettes', label: 'Assiettes', image: IMG.assiette, emoji: '🍽️' },
-  { id: 'menus', label: 'Menus', image: IMG.plate, emoji: '🥡' },
-  { id: 'boissons', label: 'Boissons', image: IMG.drink, emoji: '🥤' },
-  { id: 'desserts', label: 'Desserts', image: null, emoji: '🍰' },
-];
+/* Filtres de la page Menu : "Tout" (pseudo-catégorie, UI seulement) + les
+   vraies catégories du catalogue (src/data/menuItems.ts, source unique). */
+const MENU_FILTERS = [{ id: 'all', label: 'Tout' }, ...MENU_CATEGORIES.map((c) => ({ id: c.id, label: c.label }))];
 
 /* Plats affichés dans le carrousel hero (le plat central défile). */
 const HERO_DISHES = [
@@ -352,7 +317,7 @@ function Hero() {
 /* ------------------------------------------------------------------ */
 
 function Categories() {
-  const loop = [...CATEGORIES, ...CATEGORIES];
+  const loop = [...MENU_CATEGORIES, ...MENU_CATEGORIES];
   return (
     <section id="menu" className="py-16 md:py-24 bg-sara-cream">
       <div className="max-w-3xl mx-auto px-5 text-center mb-12">
@@ -594,7 +559,7 @@ function GallerySection() {
 
 function MenuPage() {
   const [active, setActive] = useState('all');
-  const shown = active === 'all' ? MENU_PRODUCTS : MENU_PRODUCTS.filter((p) => p.cat === active);
+  const shown = active === 'all' ? MENU_ITEMS : MENU_ITEMS.filter((p) => p.category === active);
 
   return (
     <main className="bg-sara-cream">
@@ -608,7 +573,7 @@ function MenuPage() {
       <section className="max-w-7xl mx-auto px-5 sm:px-8 pb-20 md:pb-28">
         {/* Filtres par catégorie */}
         <div className="flex flex-wrap gap-2 sm:gap-3 mb-10">
-          {MENU_CATS.map((c) => (
+          {MENU_FILTERS.map((c) => (
             <button
               key={c.id}
               onClick={() => setActive(c.id)}
@@ -627,7 +592,7 @@ function MenuPage() {
                 <Img src={p.image} emoji={p.emoji} alt={p.name} className="w-full h-full object-cover" />
               </div>
               <div className="p-5 sm:p-6 flex flex-col flex-1">
-                <span className="self-start px-3 py-1 rounded-full bg-sara-brown/10 text-sara-brown/70 text-[11px] font-bold uppercase tracking-wide">{p.catLabel}</span>
+                <span className="self-start px-3 py-1 rounded-full bg-sara-brown/10 text-sara-brown/70 text-[11px] font-bold uppercase tracking-wide">{categoryLabel(p.category)}</span>
                 <h3 className="heading text-sara-brown text-2xl mt-3">{p.name}</h3>
                 <p className="mt-2 text-sara-muted clamp-2 leading-relaxed">{p.desc}</p>
                 <div className="mt-auto pt-5">
@@ -635,7 +600,7 @@ function MenuPage() {
                     Voir le produit
                   </button>
                   <div className="flex items-center justify-between mt-4">
-                    <span className="font-display text-2xl text-sara-brown">{chf(p.price)}</span>
+                    <span className="font-display text-2xl text-sara-brown">{formatChf(p.price)}</span>
                     <button type="button" className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-sara-red text-white text-xs font-bold uppercase tracking-widest hover:bg-sara-redDark transition">
                       <Flame className="w-4 h-4" /> Commander
                     </button>

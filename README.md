@@ -1,14 +1,16 @@
 # Sara
 
-Site web mono-page pour **Sara Pizzeraya Kebap** (commande en ligne, livraison et
-réservation chicha), construit avec React + Vite.
+Site pour **Sara Pizzeraya Kebap** (commande en ligne, livraison et réservation
+chicha) : vitrine React + Vite, en cours d'évolution vers une app complète
+(compte client, panier, paiement, suivi de commande, dashboard patron) sur le
+modèle de Flash Pizzas. Voir [CLAUDE.md](./CLAUDE.md) pour l'architecture
+cible et l'avancement par phase.
 
 ## Stack
 
-- [React 18](https://react.dev/)
-- [Vite 6](https://vite.dev/)
-- [Tailwind CSS 3](https://tailwindcss.com/) pour la mise en page (utilitaires `flex`, `grid`, `rounded-*`…)
-- [lucide-react](https://lucide.dev/) pour les icônes
+- **Frontend** : React 18 + Vite 6 + Tailwind 3, [lucide-react](https://lucide.dev/) pour les icônes
+- **Backend** : Express (Node), même process que le frontend en prod (`server/`)
+- **Base de données** : Supabase (`public.users`, `public.sessions`, `public.orders`)
 
 Le site est une **vitrine** au style « FreshBox » : hero avec carrousel de plats, catégories
 en marquee défilant, offres, menu, à propos, atouts, traiteur, témoignages, FAQ, galerie,
@@ -20,27 +22,39 @@ sont dans `src/sara.css`. Les photos sont servies depuis `public/img/` (chemins 
 ## Démarrage
 
 ```bash
-npm install       # installe les dépendances
-npm run dev       # serveur de développement (http://localhost:5173)
-npm run build     # build de production dans dist/
-npm run preview   # prévisualise le build de production
+npm install                    # installe les dépendances
+cp .env.example .env           # puis remplir SUPABASE_URL / SUPABASE_KEY
+npm run dev                    # serveur de dev (http://localhost:5173, API /api/* incluse)
+npm run build                  # build de production dans dist/
+npm run check                  # vérifie TypeScript (server/)
+npm start                      # lance le build de prod (dist/index.js)
 ```
+
+Base de données : créer un projet Supabase, puis exécuter
+`supabase/migrations/0001_init.sql` dans l'éditeur SQL (rien n'est appliqué
+automatiquement par le code).
 
 ## Structure
 
 ```
 .
 ├── index.html            # point d'entrée HTML
-├── vite.config.js        # configuration Vite
+├── vite.config.ts        # config Vite + montage des routes /api/* en dev
 ├── tailwind.config.js    # scan des classes dans index.html + src/
 ├── postcss.config.js     # Tailwind + autoprefixer
+├── render.yaml            # déploiement Render (process Node persistant, pas statique)
 ├── public/
-│   └── img/              # 14 photos (JPEG) + logo PNG
+│   └── img/              # photos (JPEG) + logo PNG
 ├── src/
 │   ├── main.jsx          # montage de l'application React
 │   ├── index.css         # directives Tailwind + réglages globaux
 │   ├── sara.css          # palette Sara, polices, vague, animations
 │   └── SaraSite.jsx      # composant principal du site
+├── server/
+│   ├── db.ts              # Supabase (singleton, helpers) — LIRE AVANT DE MODIFIER
+│   ├── api.ts              # routes /api/* (middleware Connect/Express)
+│   └── index.ts            # bootstrap Express (prod)
+├── supabase/migrations/    # schéma DB, numéroté, appliqué manuellement
 └── package.json
 ```
 
