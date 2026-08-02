@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './sara.css';
 import {
   Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
-  ChevronDown, Utensils, Armchair, UserPlus, Leaf, Quote, Flame,
-  Clock, MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
+  ChevronDown, Quote, Flame,
+  MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
   ShoppingBag, User,
 } from 'lucide-react';
 
@@ -71,13 +71,6 @@ const OFFERS = [
     title: 'BURGERS SIGNATURE', subtitle: 'RICHES. JUTEUX. GÉNÉREUX.',
     save: '30%', image: IMG.burgerAlt, emoji: '🍔',
   },
-];
-
-const FEATURES = [
-  { icon: Utensils, title: 'Cuisine généreuse', text: 'Préparée avec des ingrédients frais et des saveurs qui donnent envie.' },
-  { icon: Armchair, title: 'Ambiance cosy', text: 'Un cadre chaleureux et un espace chicha pour prolonger la soirée.' },
-  { icon: UserPlus, title: 'Service rapide', text: 'Une équipe dédiée à un service fluide, en salle comme en livraison.' },
-  { icon: Leaf, title: 'Produits frais', text: 'Des ingrédients sélectionnés chaque jour pour une qualité constante.' },
 ];
 
 const CATERING = [
@@ -476,39 +469,6 @@ function About() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Why Choose Us                                                      */
-/* ------------------------------------------------------------------ */
-
-function WhyChoose() {
-  return (
-    <section id="atouts" className="relative bg-sara-red text-white">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-16 md:py-24">
-        <div className="max-w-2xl mx-auto text-center mb-12">
-          <Eyebrow className="text-white">Pourquoi nous choisir</Eyebrow>
-          <h2 className="heading text-white text-4xl sm:text-5xl mt-3">Plébiscité par les gourmands</h2>
-          <p className="mt-4 text-white/70">
-            Nous combinons des ingrédients de qualité, une cuisine experte et un service
-            attentionné pour offrir une expérience inoubliable.
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-5">
-          {FEATURES.map((f, i) => (
-            <Reveal key={f.title} delay={i * 80}>
-              <div className="h-full rounded-3xl bg-sara-redDark/50 p-8 text-center">
-                <f.icon className="w-12 h-12 mx-auto text-white/70" strokeWidth={1.5} />
-                <h3 className="heading text-2xl mt-6">{f.title}</h3>
-                <p className="mt-3 text-white/70">{f.text}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Catering                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -800,7 +760,6 @@ export default function SaraSite() {
         <SpecialOffers />
         <Chicha />
         <About />
-        <WhyChoose />
         <Catering />
         <Testimonials />
         <FaqSection />
