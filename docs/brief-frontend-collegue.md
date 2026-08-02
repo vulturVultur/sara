@@ -1,82 +1,109 @@
-# Brief SARA — espace commande client (pour la session Claude de [collègue])
+# Brief SARA — brancher l'interface sur le backend (pour la session Claude de [collègue])
 
 Colle ce message tel quel comme première instruction à ton Claude Code, dans le dossier
-`Sara` (le même repo que celui d'Ayoub — `https://github.com/vulturVultur/sara.git`).
+`Sara` (repo `https://github.com/vulturVultur/sara.git`, branche `main` à jour).
 
-## Contexte du projet
+⚠️ Ce brief **remplace** une version précédente écrite avant que le backend existe. Depuis,
+tout le backend (Phases 0 à 5) a été construit, testé contre une vraie base de données, et
+**déployé en production** sur https://sara-sd8o.onrender.com. Ton travail maintenant n'est
+plus "imaginer les écrans dans l'abstrait" mais **brancher des boutons qui existent déjà et
+ne font rien** sur une API qui existe déjà et fonctionne.
 
-SARA (Sara Pizzeraya Kebap) est un site vitrine React + Vite existant, en train d'évoluer
-vers une vraie app de commande en ligne (compte client, panier, paiement, suivi de commande),
-sur le modèle d'un autre projet de l'agence (Flash Pizzas) qui tourne déjà en prod avec de
-vrais clients. Le backend (Express + Supabase) est en cours de construction par un autre
-chantier en parallèle — **ton rôle ici est uniquement le frontend/design des écrans de
-commande**, pas le serveur.
+## Constat de départ — vérifié dans le code, pas supposé
 
-## Ce qui existe déjà — ne pas repartir de zéro
+Aucun bouton du site n'appelle le backend aujourd'hui. Dans `src/SaraSite.jsx`, les boutons
+"Commander" et "Voir le produit" de chaque plat (page Menu, `#/carte`) sont des
+`<button type="button">` **sans `onClick`** — ils ne font littéralement rien au clic. L'icône
+panier du header est un simple lien `<a href="#/carte">`. C'est tout ce qu'il y a à corriger :
+le reste du site (vitrine, navigation, animations) n'a pas besoin d'être retouché.
 
-- `src/SaraSite.jsx` : la vitrine (hero, offres, à propos, chicha, galerie, FAQ, footer) +
-  une page Menu (`#/carte`) avec des **produits placeholder** (`MENU_PRODUCTS`, à ignorer
-  côté contenu — les vrais produits arriveront dans un fichier de données partagé, pas encore
-  livré). Routage par hash fait main (`#/carte`), pas de vraie librairie de routing.
-- Charte graphique déjà posée dans `tailwind.config.js` — **à respecter, ne pas réinventer** :
-  - Couleurs : `sara.cream` `#FBEFD5`, `sara.creamSoft` `#FCF5E6`, `sara.red` `#A51E22`,
-    `sara.redDark` `#7E1518`, `sara.redBright` `#B8242A`, `sara.ink` `#2A1712`,
-    `sara.brown` `#40241A`, `sara.orange` `#F5A623`, `sara.green` `#1F5C3D`,
-    `sara.muted` `#7C6F64`
-  - Polices : `font-display` = Anton (titres), `font-body` = Poppins (corps de texte)
-  - Icônes : `lucide-react`
-  - ⚠️ Ne surtout pas reprendre la palette de Flash Pizzas (rouge/jaune/noir) — SARA a sa
-    propre identité, l'un ne doit pas ressembler à l'autre.
-- `public/img/` : photos existantes (kebabs, burgers, tacos, assiettes...).
+## Ce qui existe déjà — à consommer, pas à réinventer
 
-## Ce qu'il faut concevoir (rien de tout ça n'existe encore)
+- **Catalogue** : `src/data/menuItems.ts` — `MENU_ITEMS` (id, name, category, price, image,
+  emoji, desc), `MENU_CATEGORIES`, helpers `categoryLabel()`, `formatChf()`. C'est déjà la
+  source utilisée par la page Menu.
+- **`useAuth()`** (`src/contexts/AuthContext.jsx`, déjà monté dans `src/main.jsx`) :
+  ```js
+  const { user, isLoading, login, register, logout, updateProfile, changePassword,
+          refreshUser, toggleFavorite } = useAuth();
+  // login(email, password) / register({ email, password, prenom, nom, phone?, address?, newsletter? })
+  // toggleFavorite(itemId) — itemId = le champ `id` d'un MENU_ITEM, pas son nom
+  // user.favorites est un tableau d'ids ; user est null si pas connecté
+  ```
+- **`useCart()`** (`src/contexts/CartContext.jsx`, déjà monté) :
+  ```js
+  const { items, addItem, removeItem, updateQty, clearCart, total, count,
+          isCartOpen, openCart, closeCart, placeOrder, createStripeCheckout } = useCart();
+  // addItem({ name, price, desc, emoji? }) — desc est OBLIGATOIRE même vide ("") : le panier
+  //   fusionne deux lignes seulement si nom + prix + desc sont identiques. Oublier desc casse
+  //   la personnalisation (bug réel déjà corrigé une fois côté Flash Pizzas, à ne pas refaire).
+  // placeOrder({ orderType, address, phone, prenom, nom }) — paiement cash, vide le panier au
+  //   succès, retourne { id, status }. prenom/nom seulement nécessaires si pas connecté.
+  // createStripeCheckout({ orderType, address, phone }) — paiement carte, retourne
+  //   { clientSecret }, NE vide PAS le panier (attend la confirmation réelle du paiement).
+  ```
+- **`useOrderStatus(orderId)`** (`src/hooks/useOrderStatus.js`) :
+  ```js
+  const { status, orderType, etaMinutes, etaReadyAt, cancelledByClient,
+          markReceived, cancelOrder } = useOrderStatus(orderId);
+  // poll automatique toutes les 5s. status ∈ pending|confirmed|preparing|ready|delivered|cancelled
+  // cancelOrder() nécessite un compte connecté (les commandes invité ne peuvent pas s'auto-annuler)
+  ```
 
-Le panier actuel est un simple lien `<a href="#/carte">`, sans aucune logique. Voici les
-écrans/composants à designer et construire, dans l'ordre de priorité suggéré :
+Ces 3 hooks sont **logique/état pur, aucune UI** — c'est volontaire, exactement pour que tu
+puisses construire les écrans à ta façon par-dessus.
 
-1. **Page Menu enrichie** — la grille actuelle est un point de départ, mais il manque : un
-   vrai bouton "ajouter au panier" par produit, une modale de personnalisation si un produit a
-   des options (taille, suppléments — à voir avec le patron si ça s'applique à Sara), une
-   recherche/filtre par catégorie plus poussé.
-2. **Panier** (drawer ou modale) — liste des articles, quantités, total, bouton vers le
-   tunnel de commande. Chaque ligne de panier doit pouvoir porter une **description libre**
-   (`desc`) en plus du nom/prix/quantité — c'est ce qui permettra plus tard d'afficher des
-   suppléments ou une note ("sans oignon", etc.).
-3. **Tunnel de commande** — choix emporter / livraison, adresse + téléphone si livraison,
-   récapitulatif, bouton de validation. Prévoir un mode **"commande sans compte"** (juste
-   prénom/nom/téléphone) en plus du mode connecté — ne bloque personne à la friction du login.
-4. **Espace client `/compte`** — profil, historique de commandes, favoris (cœur sur les
-   produits). Le programme fidélité (façon "10 commandes = 1 offerte") est **à confirmer avec
-   le patron** avant de le designer — ne pas supposer que Sara le veut par défaut.
-5. **Suivi de commande** — après validation, un écran/bandeau qui montre la progression en
-   4 étapes : **Commande reçue → En préparation → Prête / En route → Livrée**, plus une
-   annulation possible juste après l'envoi (fenêtre de quelques secondes). Les statuts
-   possibles côté serveur seront exactement : `pending`, `confirmed`, `preparing`, `ready`,
-   `delivered`, `cancelled` — le design doit pouvoir représenter ces 6 états (y compris
-   "en attente de confirmation du resto" et "commande refusée/annulée", qui sont différents).
-6. **Écrans connexion / inscription** — formulaire simple (email, mot de passe, prénom, nom,
-   téléphone) + mot de passe oublié.
+## Ce qu'il faut brancher, dans cet ordre
 
-Le dashboard patron (interface de gestion des commandes) est **hors périmètre** pour l'instant
-— c'est un outil interne, pas une priorité design.
+1. **Panier fonctionnel** — remplacer le lien `<a href="#/carte">` du header par un vrai
+   composant (drawer ou modale) piloté par `isCartOpen`/`openCart`/`closeCart`, listant
+   `items`, permettant `updateQty`/`removeItem`, affichant `total`.
+2. **Bouton "Commander" sur chaque plat** (page Menu, ~ligne 582 de `SaraSite.jsx`) →
+   `onClick={() => addItem({ name: p.name, price: p.price, desc: '', emoji: p.emoji })}`.
+   (Pas de tailles/suppléments dans le catalogue actuel — `desc: ''` suffit tant que ça reste
+   le cas.)
+3. **Connexion / inscription** — formulaires simples (email, mot de passe, prénom, nom,
+   téléphone optionnel) → `login()`/`register()`. Pense à afficher les erreurs (les deux
+   fonctions rejettent avec un message lisible en français si ça échoue, ex. "Cet email est
+   déjà utilisé").
+4. **Tunnel de commande** — après le panier : choix emporter/livraison, adresse+téléphone si
+   livraison, récap, bouton de paiement. Deux chemins possibles à proposer : cash
+   (`placeOrder`) et carte (`createStripeCheckout` + `@stripe/react-stripe-js` — **pas encore
+   installé**, `npm install @stripe/react-stripe-js @stripe/stripe-js` ; la clé publique est
+   déjà dans `.env` sous `VITE_STRIPE_PUBLISHABLE_KEY`, embarque le composant
+   `EmbeddedCheckout` avec le `clientSecret` reçu).
+5. **Suivi de commande** — après validation, écran qui utilise `useOrderStatus(orderId)` pour
+   afficher une progression. Les 6 statuts n'ont pas tous le même sens à afficher :
+   `pending`/`confirmed` = "en attente que le restaurant confirme", `cancelled` avec
+   `cancelledByClient: true` = "tu as annulé", `cancelled` avec `false` = "le restaurant a
+   refusé" (message différent).
+6. **Espace `/compte`** — profil (`updateProfile`, `changePassword`), favoris (cœur sur les
+   produits → `toggleFavorite(item.id)`, `user.favorites.includes(item.id)` pour l'état actif),
+   historique (`GET /api/me/orders` en `credentials:'include'` — pas encore de hook dédié,
+   fetch direct ou demande-moi d'en ajouter un si tu préfères).
 
 ## Contraintes à respecter
 
-- Ne touche pas à `server/`, `supabase/`, `vite.config.ts`, `.env*` — c'est le chantier
-  backend en parallèle, un conflit ici coûterait cher à réconcilier.
-- La forme exacte des données produit n'est pas encore figée (ça arrive dans une prochaine
-  étape backend) — construis tes composants avec des props/mock data raisonnables
-  (`{ id, name, price, category, image, desc }`) plutôt que d'inventer un format définitif
-  gravé dans le marbre.
-- Le site doit rester un **SPA une seule origine** (pas d'appel vers un autre domaine/API
-  séparée) — tout passera par `/api/...` sur le même site une fois branché.
-- Priorité mobile : la majorité du trafic resto est mobile, teste large mais conçois d'abord
-  pour petit écran.
+- Ne touche pas à `server/`, `supabase/`, `render.yaml`, `.env`, `vite.config.ts` — chantier
+  backend séparé, un conflit ici coûte cher à réconcilier.
+- Respecte la charte Sara existante (`tailwind.config.js` : `sara.red/cream/orange/brown...`,
+  polices Anton/Poppins) — ne pas dériver vers la palette de Flash Pizzas.
+- Le dashboard patron (Phase 5) est **hors périmètre** pour l'instant, pas prioritaire.
 
-## Pour aller plus loin si besoin de contexte fonctionnel
+## Pour tester en local avec le vrai backend
 
-Le repo Flash Pizzas (même agence, déjà en prod) a résolu ces mêmes écrans avec des choix UX
-validés en conditions réelles (ex. : fusionner les lignes de panier par nom+prix+description
-pour ne pas perdre les personnalisations — un bug réel corrigé chez eux). Si tu veux t'en
-inspirer fonctionnellement (pas visuellement), demande à Ayoub l'accès au dossier
-`Flash Pizzas` en local pour lire son `CLAUDE.md`.
+```bash
+npm install
+cp .env.example .env   # puis demande à Ayoub les vraies valeurs (Supabase + Stripe test)
+npm run dev             # http://localhost:5173, API /api/* incluse
+```
+
+Sans `.env` rempli, le site s'affiche mais tout appel à `useAuth()`/`useCart()` échouera
+proprement (message d'erreur, pas de crash) — demande les clés à Ayoub plutôt que d'en créer
+de nouvelles, pour éviter deux bases de données de test qui divergent.
+
+## Référence si besoin de contexte fonctionnel plus large
+
+Le `CLAUDE.md` à la racine du repo documente chaque endpoint, chaque décision, et ce qui a
+été vérifié réellement (pas supposé) à chaque étape — utile si un comportement d'API te
+semble surprenant.
