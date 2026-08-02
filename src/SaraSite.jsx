@@ -4,6 +4,7 @@ import {
   Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
   ChevronDown, Utensils, Armchair, UserPlus, Leaf, Quote, Flame,
   Clock, MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
+  ShoppingBag, User,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -211,21 +212,27 @@ function Header() {
   return (
     <header className="relative z-50 bg-sara-cream">
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="h-24 flex items-center justify-between">
-          <a href="#accueil" className="sara-wordmark" aria-label="Sara — accueil">Sara</a>
-          <nav className="hidden lg:flex items-center gap-8">
-            {NAV.map((l) => (
-              <a key={l.href} href={l.href} className="text-sm font-semibold text-sara-brown/80 hover:text-sara-red transition">{l.label}</a>
-            ))}
-          </nav>
-          <button onClick={() => setMobile(true)} className="sara-burger lg:hidden" aria-label="Ouvrir le menu">
-            <MenuIcon className="w-6 h-6" />
-          </button>
+        <div className="h-24 grid grid-cols-3 items-center">
+          {/* Gauche : menu ☰ */}
+          <div className="flex justify-start">
+            <button onClick={() => setMobile(true)} className="sara-burger" aria-label="Ouvrir le menu">
+              <MenuIcon className="w-6 h-6" />
+            </button>
+          </div>
+          {/* Centre : wordmark SARA */}
+          <div className="flex justify-center">
+            <a href="#accueil" className="sara-wordmark" aria-label="Sara — accueil">Sara</a>
+          </div>
+          {/* Droite : panier + compte */}
+          <div className="flex justify-end items-center gap-2 sm:gap-3">
+            <a href="#menu" className="sara-iconbtn" aria-label="Panier"><ShoppingBag className="w-5 h-5" /></a>
+            <a href="#contact" className="sara-iconbtn" aria-label="Mon compte"><User className="w-5 h-5" /></a>
+          </div>
         </div>
       </div>
 
       {mobile && (
-        <div className="fixed inset-0 z-70 lg:hidden">
+        <div className="fixed inset-0 z-70">
           <div className="absolute inset-0 bg-sara-ink/50 fade-in" onClick={() => setMobile(false)} />
           <div className="absolute right-0 top-0 h-full w-72 bg-sara-cream shadow-2xl p-6 flex flex-col gap-1">
             <div className="flex items-center justify-between mb-6">

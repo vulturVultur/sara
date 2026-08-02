@@ -79,6 +79,22 @@
 .sara-burger:hover { background: #7E1518; }
 .sara-burger:active { transform: scale(.94); }
 
+/* Boutons icônes (panier / compte) à droite de l'en-tête */
+.sara-iconbtn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #40241A;
+  background: #fff;
+  box-shadow: 0 6px 16px -10px rgba(31, 31, 31, .5);
+  transition: transform .15s ease, background .15s ease, color .15s ease;
+}
+.sara-iconbtn:hover { background: #A51E22; color: #fff; }
+.sara-iconbtn:active { transform: scale(.94); }
+
 /* ------------------------------------------------------------------ */
 /*  Vague (wave) façon FreshBox                                        */
 /* ------------------------------------------------------------------ */
