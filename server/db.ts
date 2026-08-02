@@ -209,6 +209,9 @@ export type Order = {
   status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled";
   createdAt: string;
   paymentIntent: string | null;
+  etaMinutes: number | null;
+  etaReadyAt: string | null;
+  cancelledByClient: boolean;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -224,11 +227,15 @@ function rowToOrder(r: any): Order {
     status: r.status,
     createdAt: r.created_at,
     paymentIntent: r.payment_intent ?? null,
+    etaMinutes: r.eta_minutes ?? null,
+    etaReadyAt: r.eta_ready_at ?? null,
+    cancelledByClient: r.cancelled_by_client ?? false,
   };
 }
 
 export async function createOrder(
-  data: Omit<Order, "id" | "createdAt" | "status" | "paymentIntent"> & { status?: Order["status"]; paymentIntent?: string | null }
+  data: Omit<Order, "id" | "createdAt" | "status" | "paymentIntent" | "etaMinutes" | "etaReadyAt" | "cancelledByClient">
+    & { status?: Order["status"]; paymentIntent?: string | null }
 ): Promise<Order> {
   const row: Record<string, unknown> = {
     id: generateId(),
@@ -249,6 +256,76 @@ export async function createOrder(
 export async function getUserOrders(userId: string): Promise<Order[]> {
   const { data } = await sb().from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false });
   return (data ?? []).map(rowToOrder);
+}
+
+// Statut dérivé de eta_ready_at à CHAQUE lecture — pas de timer mémoire (qui
+// mourrait au redémarrage du process). Marche pour tous les chemins de
+// lecture d'une commande : polling client, page de gestion patron, etc.
+export async function findOrderById(id: string): Promise<Order | undefined> {
+  const { data } = await sb().from("orders").select("*").eq("id", id).maybeSingle();
+  if (!data) return undefined;
+  const order = rowToOrder(data);
+  if (order.status === "preparing" && order.etaReadyAt && new Date(order.etaReadyAt) <= new Date()) {
+    await sb().from("orders").update({ status: "ready" }).eq("id", id);
+    order.status = "ready";
+  }
+  return order;
+}
+
+export async function updateOrderStatus(id: string, status: Order["status"]): Promise<Order | null> {
+  const { data, error } = await sb().from("orders").update({ status }).eq("id", id).select().maybeSingle();
+  if (error || !data) return null;
+  return rowToOrder(data);
+}
+
+// Le patron accepte : passe en "preparing", pose l'ETA absolue (now + etaMinutes).
+// Restreint aux commandes pas encore décidées — sinon un clic tardif sur un
+// vieux lien "Accepter" ressusciterait une commande déjà refusée/annulée.
+export async function acceptOrder(id: string, etaMinutes: number): Promise<Order | null> {
+  const etaReadyAt = new Date(Date.now() + etaMinutes * 60 * 1000).toISOString();
+  const { data, error } = await sb()
+    .from("orders")
+    .update({ status: "preparing", eta_minutes: etaMinutes, eta_ready_at: etaReadyAt })
+    .eq("id", id)
+    .in("status", ["pending", "confirmed"])
+    .select()
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToOrder(data);
+}
+
+// +N minutes de préparation — repousse l'ETA existant (pas "now"), pour ne
+// pas grignoter un délai déjà annoncé au client si appelé plusieurs fois.
+export async function extendPrepTime(id: string, addMinutes: number): Promise<Order | null> {
+  const order = await findOrderById(id);
+  if (!order || order.status !== "preparing") return null;
+  const base = order.etaReadyAt ? new Date(order.etaReadyAt).getTime() : Date.now();
+  const newReadyAt = new Date(base + addMinutes * 60 * 1000).toISOString();
+  const newEtaMinutes = (order.etaMinutes ?? 0) + addMinutes;
+  const { data, error } = await sb()
+    .from("orders")
+    .update({ eta_minutes: newEtaMinutes, eta_ready_at: newReadyAt })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToOrder(data);
+}
+
+// Annulation par le CLIENT (flag distinct du refus par le restaurant, pour
+// que le suivi affiche le bon message). Uniquement tant qu'aucune décision
+// n'a été prise (pending/confirmed).
+export async function cancelOrderByClient(id: string, userId: string): Promise<Order | null> {
+  const { data, error } = await sb()
+    .from("orders")
+    .update({ status: "cancelled", cancelled_by_client: true })
+    .eq("id", id)
+    .eq("user_id", userId)
+    .in("status", ["pending", "confirmed"])
+    .select()
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToOrder(data);
 }
 
 // Retrouve la commande créée pour un PaymentIntent Stripe — utilisé par le

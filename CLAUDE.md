@@ -120,9 +120,15 @@ Pizzas pour le détail de chaque mécanisme — ce fichier ne fait qu'indiquer o
   périmètre du collègue frontend. Checkout invité pas testable avant la Phase 3
   (`POST /api/orders` n'existe pas encore, `user_id` nullable déjà prévu dans le schéma).
 
-### 🟡 Phase 3 — Commande + paiement (partiellement fait/vérifié, 2 août 2026)
+### ✅ Phase 3 — Commande + paiement (fait et vérifié, 2 août 2026)
 - **Migration `0002_orders_payment_intent.sql`** : ajoute `orders.payment_intent` (nullable) —
-  ⚠️ action manuelle requise, pas encore exécutée par Ayoub au moment d'écrire ceci.
+  ⚠️ vérifier qu'elle a bien été exécutée dans Supabase (nécessaire pour que le webhook
+  Stripe puisse enregistrer le `payment_intent` de chaque commande carte).
+- **Clés Stripe (compte "vultur", mode test)** posées dans `.env` : `STRIPE_SECRET_KEY`
+  (`sk_test_...`) et `VITE_STRIPE_PUBLISHABLE_KEY` (`pk_test_...`). `STRIPE_WEBHOOK_SECRET`
+  toujours absent — aucun endpoint webhook n'est encore enregistré côté Stripe (ça a besoin
+  d'une URL publique, donc après déploiement Render ; en local on le fournit à la volée pour
+  les tests, voir plus bas).
 - `server/db.ts` : `Order`/`OrderItem`, `createOrder`, `getUserOrders`, `findOrderByPaymentIntent`.
 - `server/api.ts` :
   - `POST /api/orders` — paiement cash/sur place, crée la commande direct en `pending`.
@@ -145,21 +151,84 @@ Pizzas pour le détail de chaque mécanisme — ce fichier ne fait qu'indiquer o
   la confirmation réelle du paiement). Toujours pas d'UI — la page de paiement embarquée
   Stripe (`@stripe/react-stripe-js`) reste à construire par le collègue frontend, ces deux
   fonctions sont ce sur quoi il pourra s'appuyer.
-- **Vérifié réellement contre le vrai Supabase (chemin cash uniquement)** : commande refusée
-  si `orderType` invalide (400), commande créée en connecté (`desc` de personnalisation
+- **Vérifié réellement contre le vrai Supabase (chemin cash)** : commande refusée si
+  `orderType` invalide (400), commande créée en connecté (`desc` de personnalisation
   préservé), commande créée en invité (sans cookie), `/api/me/orders` ne renvoie que les
   commandes du compte connecté (la commande invité n'y apparaît pas — comportement voulu).
-  `npm run check` + `npm run build` ✅. Données de test nettoyées après coup.
-- ⚠️ **Chemin carte (Stripe) écrit mais PAS vérifié** : aucune clé Stripe n'est configurée
-  (`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` absentes de `.env`). Le code compile et suit
-  fidèlement le pattern Flash, mais n'a pas tourné une seule fois contre l'API Stripe — pas
-  de simulation de "ça devrait marcher" ici, juste un fait : **reste à tester dès que les
-  clés de test sont disponibles**, avant de considérer la Phase 3 vraiment terminée.
+- **Vérifié réellement contre la vraie API Stripe (chemin carte)** :
+  - `POST /api/stripe/create-checkout` → vraie session Stripe créée (`cs_test_...`),
+    `clientSecret` renvoyé, confirmé via `GET /api/stripe/session-status` (`status: "open"`).
+  - `POST /api/stripe/webhook` → pas de CLI Stripe installé et pas encore d'URL publique pour
+    un vrai test bout-en-bout, donc **événement `checkout.session.completed` simulé** avec
+    l'algorithme de signature officiel de Stripe (`HMAC-SHA256("{timestamp}.{payload}",
+    secret)`, header `t=...,v1=...`) — script `test-stripe-webhook.mjs`, secret temporaire
+    passé en variable d'env au lancement du serveur (`STRIPE_WEBHOOK_SECRET=... npm run dev`).
+    Résultat : signature acceptée, commande créée en base avec les bonnes données (`items`
+    avec `desc` préservé, `total`, `address`, `phone`, `status: "pending"`, `payment_intent`
+    renseigné) ; **renvoi du même événement → `duplicate:true`, aucune deuxième commande
+    créée** (idempotence confirmée au niveau base, pas juste dans la réponse HTTP).
+    ⚠️ Ce test valide notre code de vérification/traitement, pas la config réelle du
+    dashboard Stripe (qui n'existe pas encore) — un vrai test bout-en-bout (Stripe → notre
+    webhook) reste à faire une fois `STRIPE_WEBHOOK_SECRET` obtenu après déploiement.
+  - Données de test nettoyées après coup (ordres + doublons vérifiés absents).
+- `npm run check` + `npm run build` ✅.
 
-### ⬜ Phase 4 — Suivi de commande + notif patron
-Statut dérivé de `eta_ready_at` (jamais de `setTimeout` — survit aux redémarrages), lien de
-gestion signé HMAC (accepter/refuser) envoyé au patron par un canal à définir (Telegram le
-plus simple à mettre en place).
+### 🟡 Phase 4 — Suivi de commande + notif patron (fait/vérifié sauf Telegram réel, 2 août 2026)
+- **Migration `0003_orders_tracking.sql`** : `eta_minutes`, `eta_ready_at`, `cancelled_by_client`
+  — exécutée par Ayoub, vérifiée (colonnes présentes).
+- `server/db.ts` : `findOrderById` (auto-progression `preparing`→`ready` dès que `eta_ready_at`
+  est dépassé, recalculée à **chaque lecture**, jamais de `setTimeout`), `acceptOrder`
+  (restreint aux commandes `pending`/`confirmed` — garde-fou ajouté après relecture du code,
+  absent chez Flash mais peu coûteux et évite qu'un vieux lien "Accepter" ressuscite une
+  commande refusée), `updateOrderStatus`, `cancelOrderByClient`.
+- `server/api.ts` :
+  - `orderActionToken`/`verifyOrderToken` — HMAC-SHA256(orderId, `ADMIN_SECRET`), stateless,
+    comparaison à temps constant.
+  - `GET /api/orders/:id/manage` — page HTML autonome (CSS+JS inline, CSP dédiée), boutons
+    Accepter 15/30/45/60 + Refuser si la commande est encore `pending`/`confirmed`, sinon
+    affiche juste le statut (idempotent).
+  - `POST /api/orders/:id/manage/accept|refuse` — capture/annule le paiement Stripe si
+    `payment_intent` présent (`captureOrderPayment`/`cancelOrderPayment`, enfin câblées).
+  - `GET /api/orders/:id/status` (public, l'ID sert de secret implicite), `POST
+    /api/orders/:id/received` (ready→delivered), `DELETE /api/orders/:id` (client, compte
+    requis, `pending`/`confirmed` uniquement).
+  - `POST /api/admin/telegram/test` (Bearer `ADMIN_SECRET`) — pour tester la notif sans
+    passer par une vraie commande.
+  - Notification Telegram best-effort branchée sur `POST /api/orders` et le webhook Stripe —
+    no-op silencieux (juste un `console.warn`) si `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
+    absents, donc le flow commande continue de fonctionner sans.
+- `ADMIN_SECRET` généré et posé dans `.env` — aucun compte tiers requis pour celui-ci
+  (contrairement à Supabase/Stripe), c'est juste un secret aléatoire local.
+- `src/hooks/useOrderStatus.js` : poll 5s, expose `status/orderType/etaMinutes/etaReadyAt/
+  cancelledByClient/markReceived/cancelOrder` — toujours logique seulement, pas d'UI (le
+  collègue frontend construit l'écran de suivi par-dessus).
+- **Vérifié réellement contre le vrai Supabase, scénario complet** :
+  1. Commande créée → `GET /status` public → `pending`.
+  2. Page `/manage` : mauvais jeton → 403 ; bon jeton → boutons Accepter 15/30/45/60 présents.
+  3. Accepter 15 min → `preparing`, `etaReadyAt` = +15 min correct.
+  4. **`eta_ready_at` forcé dans le passé directement en base** (simule le temps qui passe,
+     sans attendre) → `GET /status` suivant repasse tout seul à `ready`, sans aucune action
+     serveur déclenchée entre-temps — **le mécanisme central de la Phase 4 est confirmé**.
+  5. `POST /received` → `delivered` ; rappelé une 2e fois → 404 (déjà livrée, pas "ready").
+  6. Refuser une commande → `cancelled` ; **tentative de la réaccepter ensuite → rejetée**
+     (le garde-fou ajouté fonctionne).
+  7. `DELETE` sans cookie → 401 ; avec cookie propriétaire sur commande `pending` → `cancelled`
+     + `cancelledByClient: true` (distinct d'un refus patron, comme prévu).
+  8. `POST /api/admin/telegram/test` : sans auth → 403 ; mauvais secret → 403 ; bon secret →
+     502 avec message clair (`TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID absents`) — échec propre,
+     pas un crash.
+  Toutes les données de test nettoyées après coup. `npm run check` + `npm run build` ✅.
+- ⚠️ **Pas testé : une vraie notification Telegram reçue par un vrai bot.** Aucun bot créé —
+  reste une action manuelle d'Ayoub (voir ci-dessous) avant de considérer la Phase 4 à 100 %.
+
+#### Créer le bot Telegram (reste à faire par Ayoub)
+1. Ouvrir Telegram → chercher **@BotFather** → `/newbot` → suivre les instructions (nom,
+   username se terminant par `bot`) → il donne un **token** (`TELEGRAM_BOT_TOKEN`).
+2. Envoyer n'importe quel message au bot créé (pour qu'il ait une conversation à répondre).
+3. Ouvrir dans un navigateur : `https://api.telegram.org/bot<TOKEN>/getUpdates` → chercher
+   `"chat":{"id": ...}` dans la réponse → c'est le **`TELEGRAM_CHAT_ID`**.
+4. Ajouter les deux valeurs dans `.env`, relancer le serveur, tester via
+   `POST /api/admin/telegram/test` avec `Authorization: Bearer <ADMIN_SECRET>`.
 
 ### ⬜ Phase 5 — Dashboard patron
 Compte patron par email d'env (`BOSS_EMAIL`), stats dérivées d'`orders` +

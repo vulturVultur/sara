@@ -12,6 +12,7 @@ import {
   pingDb, findUserByEmail, findUserById, createUser, updateUser, updatePassword,
   verifyPassword, toggleFavorite, safeUser, createSession, findSession,
   deleteSession, deleteUserSessions, createOrder, getUserOrders, findOrderByPaymentIntent,
+  findOrderById, updateOrderStatus, acceptOrder, cancelOrderByClient,
   type Order,
 } from "./db.js";
 
@@ -23,6 +24,146 @@ function getStripe(): Stripe {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _stripe = new Stripe(key, { apiVersion: "2026-04-22.dahlia" as any });
   return _stripe;
+}
+
+// Encaisse l'autorisation carte (capture manuelle) à l'acceptation patron.
+// No-op si pas de paiement en ligne ou déjà capturé. Best-effort (loggue).
+async function captureOrderPayment(paymentIntent: string | null | undefined): Promise<void> {
+  if (!paymentIntent) return;
+  try {
+    const pi = await getStripe().paymentIntents.retrieve(paymentIntent);
+    if (pi.status === "requires_capture") {
+      await getStripe().paymentIntents.capture(paymentIntent);
+      console.log("[Stripe] Paiement encaissé (capture):", paymentIntent);
+    }
+  } catch (e) { console.error("[Stripe] Échec capture:", e); }
+}
+
+// Annule l'autorisation carte au refus — le client n'est jamais débité.
+async function cancelOrderPayment(paymentIntent: string | null | undefined): Promise<void> {
+  if (!paymentIntent) return;
+  try {
+    const pi = await getStripe().paymentIntents.retrieve(paymentIntent);
+    if (["requires_capture", "requires_confirmation", "requires_payment_method", "requires_action"].includes(pi.status)) {
+      await getStripe().paymentIntents.cancel(paymentIntent);
+      console.log("[Stripe] Autorisation annulée:", paymentIntent);
+    }
+  } catch (e) { console.error("[Stripe] Échec annulation:", e); }
+}
+
+// ── Jeton d'action signé (lien Accepter/Refuser envoyé au patron) ────────────
+// HMAC-SHA256(orderId, ADMIN_SECRET) — stateless, pas de table de tokens à
+// gérer. Seul le détenteur du message (Telegram) peut agir sur la commande.
+function orderActionToken(orderId: string): string {
+  const secret = process.env.ADMIN_SECRET ?? "";
+  return crypto.createHmac("sha256", secret).update(orderId).digest("hex");
+}
+function verifyOrderToken(orderId: string, token: string): boolean {
+  if (!/^[a-f0-9]{64}$/.test(token)) return false;
+  const expected = orderActionToken(orderId);
+  try { return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(token)); }
+  catch { return false; }
+}
+
+// ── Notification patron (Telegram) ────────────────────────────────────────────
+// No-op silencieux si TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID absents — le reste
+// du flow (commande créée, lien de gestion) continue de fonctionner sans.
+async function sendBossTelegram(text: string): Promise<{ ok: boolean; error?: string }> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return { ok: false, error: "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID absents" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    if (!r.ok) return { ok: false, error: `Telegram HTTP ${r.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
+}
+
+function buildOrderNotifText(p: {
+  ref: string; typeLabel: string; customerName: string; phone: string; address: string;
+  itemsList: string; total: number; manageUrl: string;
+}): string {
+  return [
+    `🍽️ Nouvelle commande Sara — #${p.ref}`,
+    `${p.typeLabel}`,
+    `Client : ${p.customerName}${p.phone ? ` (${p.phone})` : ""}`,
+    p.address ? `Adresse : ${p.address}` : null,
+    "",
+    p.itemsList,
+    "",
+    `Total : CHF ${p.total.toFixed(2)}`,
+    "",
+    `Gérer la commande : ${p.manageUrl}`,
+  ].filter((l) => l !== null).join("\n");
+}
+
+// ── Page de gestion (lien Telegram — accepter/refuser sans se logger) ────────
+function renderManageError(message: string): string {
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sara — Gestion commande</title><style>body{font-family:system-ui,sans-serif;background:#FBEFD5;color:#40241A;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center}</style></head>
+<body><div><h1>${message}</h1></div></body></html>`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderManagePage(order: any, token: string): string {
+  const itemsHtml = order.items
+    .map((i: Order["items"][number]) => `<li>${i.quantity}× ${i.name}${i.desc ? ` <em>(${i.desc})</em>` : ""} — CHF ${i.price.toFixed(2)}</li>`)
+    .join("");
+
+  const needsDecision = order.status === "pending" || order.status === "confirmed";
+  const statusLabel: Record<string, string> = {
+    pending: "En attente de décision", confirmed: "En attente de décision",
+    preparing: "En préparation", ready: "Prête", delivered: "Livrée", cancelled: "Refusée / annulée",
+  };
+
+  const actionsHtml = needsDecision ? `
+    <div class="etas">
+      ${[15, 30, 45, 60].map((m) => `<button class="accept" data-eta="${m}">Accepter ${m} min</button>`).join("")}
+    </div>
+    <button class="refuse" id="refuse">Refuser</button>
+    <p id="result"></p>
+    <script>
+      const orderId = ${JSON.stringify(order.id)};
+      const t = ${JSON.stringify(token)};
+      async function post(path, body) {
+        const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const j = await r.json().catch(() => ({}));
+        document.getElementById("result").textContent = r.ok ? "✅ Fait." : "❌ " + (j.error || "Erreur");
+        if (r.ok) document.querySelectorAll("button").forEach((b) => b.disabled = true);
+      }
+      document.querySelectorAll(".accept").forEach((b) => {
+        b.addEventListener("click", () => post("/api/orders/" + orderId + "/manage/accept", { t, etaMinutes: Number(b.dataset.eta) }));
+      });
+      document.getElementById("refuse").addEventListener("click", () => post("/api/orders/" + orderId + "/manage/refuse", { t }));
+    </script>
+  ` : `<p>Statut actuel : <strong>${statusLabel[order.status] ?? order.status}</strong></p>`;
+
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sara — Gestion commande</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#FBEFD5;color:#40241A;margin:0;padding:24px;max-width:480px;margin:0 auto}
+  h1{font-size:20px}
+  ul{padding-left:18px}
+  .etas{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+  button{font:inherit;padding:12px 16px;border-radius:999px;border:none;cursor:pointer}
+  .accept{background:#A51E22;color:#fff;flex:1;min-width:120px}
+  .refuse{background:none;border:1px solid #A51E22;color:#A51E22;width:100%;margin-top:8px}
+  button:disabled{opacity:.5;cursor:default}
+</style></head>
+<body>
+  <h1>Commande #${order.id.slice(0, 8).toUpperCase()}</h1>
+  <p>${order.orderType === "livraison" ? "🛵 Livraison" : "🏃 À emporter"}${order.phone ? ` — ${order.phone}` : ""}</p>
+  ${order.address ? `<p>${order.address}</p>` : ""}
+  <ul>${itemsHtml}</ul>
+  <p><strong>Total : CHF ${order.total.toFixed(2)}</strong></p>
+  ${actionsHtml}
+</body></html>`;
 }
 
 type Req = IncomingMessage & { body?: unknown };
@@ -256,7 +397,7 @@ export function setupApi(app: App) {
 
           // Capture manuelle : la carte est seulement AUTORISÉE (argent réservé),
           // pas encore débitée. La commande reste "pending" — l'encaissement
-          // (capture) et son annulation arrivent en Phase 4 avec accepter/refuser.
+          // (capture) se fait à l'acceptation, l'annulation au refus (plus bas).
           const order = await createOrder({
             userId: meta.userId || null,
             items,
@@ -268,6 +409,21 @@ export function setupApi(app: App) {
           });
 
           console.log(`[Stripe] Commande carte autorisée (pending) via webhook: ${order.id} PI=${paymentIntent}`);
+
+          const baseUrlNotif = process.env.BASE_URL ?? "http://localhost:3000";
+          const notifText = buildOrderNotifText({
+            ref: order.id.slice(0, 8).toUpperCase(),
+            typeLabel: (order.orderType === "livraison" ? "🛵 Livraison" : "🏃 À emporter") + " — 💳 payé par carte (encaissé à l'acceptation)",
+            customerName: meta.customerName || "Client",
+            phone: order.phone,
+            address: order.orderType === "livraison" ? order.address : "",
+            itemsList: items.map((i) => `• ${i.quantity}x ${i.name}${i.desc ? ` ↳ ${i.desc}` : ""}`).join("\n"),
+            total: order.total,
+            manageUrl: `${baseUrlNotif}/api/orders/${order.id}/manage?t=${orderActionToken(order.id)}`,
+          });
+          sendBossTelegram(notifText).then((r) => {
+            if (!r.ok) console.warn("[Telegram] Notification non envoyée:", r.error);
+          });
         }
 
         ok(res, { received: true });
@@ -435,9 +591,21 @@ export function setupApi(app: App) {
         console.log(`Articles  : ${itemsLog}`);
         console.log(`Total     : CHF ${order.total.toFixed(2)}`);
         console.log("──────────────────────────────────────────");
-        // ⚠️ Pas encore de notification patron (Telegram/etc.) — Phase 4. Pour
-        // l'instant une commande "pending" n'avance que par une action manuelle
-        // en base tant que la Phase 4 (accepter/refuser) n'est pas construite.
+
+        const baseUrlNotif = process.env.BASE_URL ?? "http://localhost:3000";
+        const notifText = buildOrderNotifText({
+          ref: order.id.slice(0, 8).toUpperCase(),
+          typeLabel: order.orderType === "livraison" ? "🛵 Livraison" : "🏃 À emporter",
+          customerName,
+          phone: order.phone,
+          address: order.orderType === "livraison" ? order.address : "",
+          itemsList: orderItems.map((i) => `• ${i.quantity}x ${i.name}${i.desc ? ` ↳ ${i.desc}` : ""}`).join("\n"),
+          total: order.total,
+          manageUrl: `${baseUrlNotif}/api/orders/${order.id}/manage?t=${orderActionToken(order.id)}`,
+        });
+        sendBossTelegram(notifText).then((r) => {
+          if (!r.ok) console.warn("[Telegram] Notification non envoyée:", r.error);
+        });
 
         ok(res, { id: order.id, status: order.status });
         return;
@@ -512,6 +680,103 @@ export function setupApi(app: App) {
         if (!/^cs_[a-zA-Z0-9_]+$/.test(sessionId)) { err(res, 400, "session_id invalide"); return; }
         const s = await getStripe().checkout.sessions.retrieve(sessionId);
         ok(res, { status: s.status, paymentStatus: s.payment_status });
+        return;
+      }
+
+      // ── Statut commande (public — l'ID de 32 car. hex est le secret implicite) ──
+      if (method === "GET" && /^\/api\/orders\/[a-f0-9]+\/status$/.test(url)) {
+        if (!rateLimit("status", req, 60, 60_000)) { tooMany(res); return; }
+        const orderId = url.split("/")[3];
+        const order = await findOrderById(orderId);
+        if (!order) { err(res, 404, "Commande introuvable"); return; }
+        ok(res, {
+          status: order.status, orderType: order.orderType,
+          etaMinutes: order.etaMinutes, etaReadyAt: order.etaReadyAt,
+          cancelledByClient: order.cancelledByClient,
+        });
+        return;
+      }
+
+      // ── Client confirme "bien reçue" (ready → delivered) ──
+      if (method === "POST" && /^\/api\/orders\/[a-f0-9]+\/received$/.test(url)) {
+        const orderId = url.split("/")[3];
+        const order = await findOrderById(orderId);
+        if (!order || order.status !== "ready") { err(res, 404, "Commande introuvable ou pas encore prête"); return; }
+        await updateOrderStatus(orderId, "delivered");
+        ok(res, { ok: true });
+        return;
+      }
+
+      // ── Annulation par le client (compte requis + propriétaire) ──
+      if (method === "DELETE" && /^\/api\/orders\/[a-f0-9]+$/.test(url)) {
+        const auth = await requireAuth(); if (!auth) return;
+        const orderId = url.split("/")[3];
+        const cancelled = await cancelOrderByClient(orderId, auth.user.id);
+        if (!cancelled) { err(res, 400, "Commande introuvable ou déjà en préparation"); return; }
+        if (cancelled.paymentIntent) await cancelOrderPayment(cancelled.paymentIntent);
+        ok(res, { ok: true });
+        return;
+      }
+
+      // ── Page de gestion (lien Telegram, protégée par jeton signé) ──
+      if (method === "GET" && /^\/api\/orders\/[a-f0-9]+\/manage$/.test(url)) {
+        const orderId = url.split("/")[3];
+        const tParam = new URL(req.url ?? "", "http://x").searchParams.get("t") ?? "";
+        const sendHtml = (code: number, html: string) => {
+          res.statusCode = code;
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'");
+          res.end(html);
+        };
+        if (!verifyOrderToken(orderId, tParam)) { sendHtml(403, renderManageError("Lien invalide ou expiré.")); return; }
+        const order = await findOrderById(orderId);
+        if (!order) { sendHtml(404, renderManageError("Commande introuvable.")); return; }
+        sendHtml(200, renderManagePage(order, tParam));
+        return;
+      }
+
+      if (method === "POST" && /^\/api\/orders\/[a-f0-9]+\/manage\/accept$/.test(url)) {
+        if (!rateLimit("manage", req, 30, 60_000)) { tooMany(res); return; }
+        const orderId = url.split("/")[3];
+        const tParam = typeof body.t === "string" ? body.t : "";
+        if (!verifyOrderToken(orderId, tParam)) { err(res, 403, "Lien invalide"); return; }
+        const etaRaw = Number(body.etaMinutes);
+        const etaMinutes = [15, 30, 45, 60].includes(etaRaw) ? etaRaw : null;
+        if (etaMinutes === null) { err(res, 400, "Délai invalide (15, 30, 45 ou 60)"); return; }
+        const existing = await findOrderById(orderId);
+        if (!existing) { err(res, 404, "Commande introuvable"); return; }
+        const accepted = await acceptOrder(orderId, etaMinutes);
+        if (!accepted) { err(res, 404, "Commande introuvable"); return; }
+        await captureOrderPayment(existing.paymentIntent);
+        console.log(`[Manage] ✅ Commande ${orderId} acceptée — prête dans ${etaMinutes}min`);
+        ok(res, { status: accepted.status, etaMinutes: accepted.etaMinutes });
+        return;
+      }
+
+      if (method === "POST" && /^\/api\/orders\/[a-f0-9]+\/manage\/refuse$/.test(url)) {
+        if (!rateLimit("manage", req, 30, 60_000)) { tooMany(res); return; }
+        const orderId = url.split("/")[3];
+        const tParam = typeof body.t === "string" ? body.t : "";
+        if (!verifyOrderToken(orderId, tParam)) { err(res, 403, "Lien invalide"); return; }
+        const existing = await findOrderById(orderId);
+        const updated = await updateOrderStatus(orderId, "cancelled");
+        if (!updated) { err(res, 404, "Commande introuvable"); return; }
+        await cancelOrderPayment(existing?.paymentIntent);
+        console.log(`[Manage] ❌ Commande ${orderId} refusée`);
+        ok(res, { status: "cancelled" });
+        return;
+      }
+
+      // ── Test notification Telegram (sans créer de commande) ──
+      if (method === "POST" && url === "/api/admin/telegram/test") {
+        const secret = process.env.ADMIN_SECRET;
+        const authHeader = req.headers.authorization ?? "";
+        const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+        if (!secret || !provided || provided !== secret) { err(res, 403, "Non autorisé"); return; }
+        const stamp = new Date().toLocaleString("fr-CH", { timeZone: "Europe/Zurich" });
+        const result = await sendBossTelegram(`✅ Test Sara — notifications Telegram opérationnelles.\n🕒 ${stamp}`);
+        if (result.ok) ok(res, { ok: true });
+        else err(res, 502, `Échec Telegram : ${result.error ?? "inconnu"}`);
         return;
       }
 
