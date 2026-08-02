@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './sara.css';
 import {
   Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
-  ChevronDown, Quote, Flame,
+  ChevronDown, Flame,
   MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
   ShoppingBag, User,
 } from 'lucide-react';
@@ -73,24 +73,12 @@ const OFFERS = [
   },
 ];
 
-const CATERING = [
-  { label: 'Plat 1', name: 'Assiette Mixte Traiteur', image: IMG.assiette, emoji: '🍽️', description: 'Brochettes de poulet et bœuf, riz safran et sauces maison, pour partager.' },
-  { label: 'Plat 2', name: 'Plateau Burgers Gourmet', image: IMG.burgerAlt, emoji: '🍔', description: 'Burgers généreux garnis d’ingrédients frais, parfaits pour les grandes tablées.' },
-  { label: 'Plat 3', name: 'Durum & Grillades', image: IMG.durum, emoji: '🌯', description: 'Galettes roulées grillées minute, viandes marinées et sauces au choix.' },
-];
-
 /* Photos du salon chicha — remplace/complète avec tes propres visuels.
    Mets les fichiers dans public/img/ et renseigne le chemin (ex : '/img/salon-1.jpg'). */
 const CHICHA_PHOTOS = [
   { src: IMG.chicha, emoji: '💨', alt: "Espace chicha à l'ambiance tamisée" },
   { src: IMG.salle, emoji: '🛋️', alt: 'Le salon Sara, cadre cosy et chaleureux' },
   { src: null, emoji: '💨', alt: 'Photo du salon chicha à venir' },
-];
-
-const REVIEWS = [
-  { name: 'Yanis B.', role: 'Client fidèle', comment: 'Meilleur kebab du quartier ! Viande tendre, frites maison, service rapide. Je reviens à chaque fois avec le même plaisir.' },
-  { name: 'Sarah M.', role: 'Habituée chicha', comment: 'L’espace chicha est super cosy et les parfums sont excellents. Une super soirée du début à la fin, à refaire.' },
-  { name: 'Karim A.', role: 'Commande en ligne', comment: 'Commande en livraison, tout est arrivé chaud et délicieux. Le double cheeseburger est une vraie tuerie.' },
 ];
 
 const FAQ = [
@@ -120,7 +108,6 @@ const NAV = [
   { href: '#menu', label: 'Menu' },
   { href: '#chicha', label: 'Chicha' },
   { href: '#about', label: 'À propos' },
-  { href: '#catering', label: 'Traiteur' },
   { href: '#galerie', label: 'Galerie' },
   { href: '#contact', label: 'Contact' },
 ];
@@ -469,97 +456,6 @@ function About() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Catering                                                           */
-/* ------------------------------------------------------------------ */
-
-function Catering() {
-  return (
-    <section id="catering" className="py-16 md:py-24 bg-sara-cream">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-12">
-          <div>
-            <Eyebrow>Traiteur</Eyebrow>
-            <h2 className="heading text-sara-brown text-4xl sm:text-5xl mt-3">Un traiteur pour<br />chaque célébration</h2>
-          </div>
-          <div className="max-w-sm md:text-right">
-            <p className="text-sara-muted">
-              Du repas intime au grand événement, nous offrons des expériences culinaires
-              d'exception qui laissent un souvenir durable.
-            </p>
-            <PillLink href="#menu" className="mt-6">Explorer le menu</PillLink>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          {CATERING.slice(0, 2).map((d, i) => (
-            <Reveal key={d.name} delay={i * 100}><CateringCard dish={d} /></Reveal>
-          ))}
-          <Reveal delay={150} className="md:col-span-2 md:max-w-[calc(50%-0.75rem)]">
-            <CateringCard dish={CATERING[2]} />
-          </Reveal>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CateringCard({ dish }) {
-  return (
-    <article className="relative rounded-3xl overflow-hidden aspect-4-3">
-      <Img src={dish.image} emoji={dish.emoji} alt={dish.name} className="absolute inset-0 w-full h-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-t from-sara-ink/90 via-sara-ink/25 to-transparent" />
-      <span className="absolute top-0 left-6 px-5 py-2 bg-sara-cream text-sara-red font-semibold rounded-b-2xl">{dish.label}</span>
-      <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-        <h3 className="heading text-2xl">{dish.name}</h3>
-        <p className="mt-2 text-white/80 clamp-2">{dish.description}</p>
-      </div>
-    </article>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Testimonials — carrousel                                          */
-/* ------------------------------------------------------------------ */
-
-function Testimonials() {
-  const [i, setI] = useState(0);
-  const n = REVIEWS.length;
-  const next = useCallback(() => setI((p) => (p + 1) % n), [n]);
-  const prev = () => setI((p) => (p - 1 + n) % n);
-  useEffect(() => { const t = setInterval(next, 6000); return () => clearInterval(t); }, [next]);
-  const r = REVIEWS[i];
-
-  return (
-    <section id="avis" className="py-16 md:py-24 bg-sara-cream">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="rounded-3xl bg-sara-red text-white p-6 sm:p-10 md:p-14">
-          <div className="grid md:grid-cols-2 gap-10 items-center">
-            <div className="rounded-3xl bg-sara-orange aspect-square overflow-hidden">
-              <Img src={null} emoji="👨‍🍳" alt={`Portrait — ${r.name}`} className="w-full h-full object-cover" />
-            </div>
-            <div>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <Eyebrow className="text-white">Témoignages</Eyebrow>
-                  <h2 className="heading text-white text-3xl sm:text-4xl mt-3">Ce que disent nos clients</h2>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={prev} className="w-11 h-11 rounded-xl bg-white text-sara-red flex items-center justify-center hover:bg-sara-creamSoft transition" aria-label="Précédent"><ChevronLeft className="w-5 h-5" /></button>
-                  <button onClick={next} className="w-11 h-11 rounded-xl bg-white text-sara-red flex items-center justify-center hover:bg-sara-creamSoft transition" aria-label="Suivant"><ChevronRight className="w-5 h-5" /></button>
-                </div>
-              </div>
-              <Quote className="w-10 h-10 text-sara-orange mt-6 fill-sara-orange" />
-              <p key={i} className="fade-in mt-4 text-lg sm:text-xl text-white/90 leading-relaxed">« {r.comment} »</p>
-              <p className="mt-6 font-semibold">{r.name} <span className="text-white/60 font-normal">· {r.role}</span></p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  FAQ — accordéon                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -712,7 +608,7 @@ function CtaFooter() {
           </div>
 
           <FooterCol title="Menu" links={[['#menu', 'Menu'], ['#offres', 'Offres'], ['#chicha', 'Chicha']]} />
-          <FooterCol title="Restaurant" links={[['#about', 'À propos'], ['#catering', 'Traiteur'], ['#galerie', 'Galerie']]} />
+          <FooterCol title="Restaurant" links={[['#about', 'À propos'], ['#chicha', 'Chicha'], ['#galerie', 'Galerie']]} />
           <FooterCol title="Aide" links={[['#faq', 'FAQ'], ['#contact', 'Contact']]} />
           <FooterCol title="Légal" links={[['#', 'Confidentialité'], ['#', 'Conditions']]} />
         </div>
@@ -760,8 +656,6 @@ export default function SaraSite() {
         <SpecialOffers />
         <Chicha />
         <About />
-        <Catering />
-        <Testimonials />
         <FaqSection />
         <GallerySection />
         <Blog />
