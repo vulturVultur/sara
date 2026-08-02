@@ -268,43 +268,58 @@ function Hero() {
   }, [n]);
 
   return (
-    <section id="accueil" className="relative bg-sara-cream">
-      <div className="relative overflow-hidden bg-sara-red">
+    <section id="accueil" className="relative overflow-hidden bg-sara-cream">
+      {/* bloc rouge : décor + titre */}
+      <div className="relative bg-sara-red pt-14 md:pt-20 pb-40 md:pb-56">
         {/* décor flottant */}
-        <span className="pointer-events-none absolute left-6 top-16 text-4xl floaty opacity-90" aria-hidden="true">🌶️</span>
-        <span className="pointer-events-none absolute left-24 bottom-24 text-3xl floaty-slow opacity-80" aria-hidden="true">🌿</span>
-        <span className="pointer-events-none absolute right-10 top-24 text-4xl floaty-slow opacity-90" aria-hidden="true">🍅</span>
-        <span className="pointer-events-none absolute right-28 bottom-28 text-3xl floaty opacity-80" aria-hidden="true">🌶️</span>
+        <span className="pointer-events-none absolute left-4 top-16 text-3xl sm:text-4xl floaty opacity-90" aria-hidden="true">🌶️</span>
+        <span className="pointer-events-none absolute left-20 bottom-10 text-2xl sm:text-3xl floaty-slow opacity-80" aria-hidden="true">🌿</span>
+        <span className="pointer-events-none absolute right-8 top-24 text-3xl sm:text-4xl floaty-slow opacity-90" aria-hidden="true">🍅</span>
+        <span className="pointer-events-none absolute right-24 bottom-16 text-2xl sm:text-3xl floaty opacity-80" aria-hidden="true">🌶️</span>
 
-        <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-14 pb-40 md:pt-16 md:pb-52 text-center relative">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8 text-center relative z-10">
           <p className="text-sara-creamSoft/90 font-medium tracking-wide mb-6">• Frais • Rapide • Savoureux</p>
           <h1 className="heading text-white text-5xl sm:text-6xl md:text-7xl max-w-4xl mx-auto">
             Le goût qui donne<br />envie de revenir
           </h1>
-
-          {/* carrousel : plat central qui défile */}
-          <div className="relative mx-auto mt-10 w-64 h-64 sm:w-80 sm:h-80">
-            {HERO_DISHES.map((d, i) => (
-              <div key={i} className={`hero-slide ${i === idx ? 'is-active' : ''}`} aria-hidden={i !== idx}>
-                <Img src={d.image} emoji={d.emoji} alt={d.alt} className="w-full h-full object-cover rounded-full shadow-2xl ring-8 ring-white/10" />
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-            <PillLink href="#/carte" variant="cream"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
-            <PillLink href="#/carte" variant="dark">Voir le menu</PillLink>
-          </div>
-
-          {/* points du carrousel */}
-          <div className="mt-8 flex justify-center gap-2">
-            {HERO_DISHES.map((_, i) => (
-              <button key={i} onClick={() => setIdx(i)} className={`h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-white' : 'w-2 bg-white/40'}`} aria-label={`Plat ${i + 1}`} />
-            ))}
-          </div>
         </div>
 
         <Wave fill="#FBEFD5" />
+      </div>
+
+      {/* bande d'images qui chevauche la vague : plat gauche · carrousel central · burger droite */}
+      <div className="relative z-20 -mt-32 md:-mt-44 h-48 sm:h-56 md:h-72 pointer-events-none">
+        {/* image gauche */}
+        <div className="hidden md:block absolute left-0 -translate-x-1/4 top-20 w-40 lg:w-52 floaty-slow">
+          <Img src={IMG.assietteAlt} emoji="🍽️" alt="Assiette garnie Sara" className="w-full aspect-square object-cover rounded-full shadow-2xl ring-8 ring-white/10" />
+        </div>
+
+        {/* plat central (carrousel) */}
+        <div className="absolute left-1/2 -translate-x-1/2 top-0 w-44 sm:w-52 md:w-64 aspect-square">
+          {HERO_DISHES.map((d, i) => (
+            <div key={i} className={`hero-slide ${i === idx ? 'is-active' : ''}`} aria-hidden={i !== idx}>
+              <Img src={d.image} emoji={d.emoji} alt={d.alt} className="w-full h-full object-cover rounded-full shadow-2xl ring-8 ring-white/10" />
+            </div>
+          ))}
+        </div>
+
+        {/* image droite (burger) */}
+        <div className="hidden md:block absolute right-0 translate-x-1/4 top-12 w-40 lg:w-52 floaty">
+          <Img src={IMG.burgerAlt} emoji="🍔" alt="Burger généreux Sara" className="w-full aspect-square object-cover rounded-full shadow-2xl ring-8 ring-white/10" />
+        </div>
+      </div>
+
+      {/* boutons + points du carrousel */}
+      <div className="relative z-10 text-center px-5 pt-6 pb-16 md:pb-20">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <PillLink href="#/carte" variant="red"><Flame className="w-5 h-5" /> Commander maintenant</PillLink>
+          <PillLink href="#/carte" variant="dark">Voir le menu</PillLink>
+        </div>
+        <div className="mt-8 flex justify-center gap-2">
+          {HERO_DISHES.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)} className={`h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-sara-red' : 'w-2 bg-sara-brown/30'}`} aria-label={`Plat ${i + 1}`} />
+          ))}
+        </div>
       </div>
     </section>
   );
