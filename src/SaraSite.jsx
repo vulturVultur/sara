@@ -234,6 +234,63 @@ function Eyebrow({ children, className = 'text-sara-goldDeep' }) {
   return <span className={`eyebrow ${className}`}>{children}</span>;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Vol de la pastille « ajouté au panier »                            */
+/* ------------------------------------------------------------------ */
+
+/* Identifiant de la cible : l'icône panier de l'en-tête. */
+const CART_ANCHOR_ID = 'sara-cart-anchor';
+
+const reduitLesAnimations = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/* Envoie une pastille rouge du bouton cliqué vers l'icône panier.
+   Purement décoratif : si la cible est absente, hors écran, ou si l'API
+   d'animation manque, on ne fait rien — l'ajout au panier a déjà eu lieu. */
+function volVersLePanier(depuis) {
+  if (!depuis || reduitLesAnimations()) return;
+  const cible = document.getElementById(CART_ANCHOR_ID);
+  if (!cible || typeof depuis.animate !== 'function') return;
+
+  const a = depuis.getBoundingClientRect();
+  const b = cible.getBoundingClientRect();
+  // Cible hors du viewport (en-tête non collant, déjà défilé) : la pastille
+  // partirait dans le vide, mieux vaut s'abstenir.
+  if (b.bottom < 0 || b.top > window.innerHeight) return;
+
+  const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
+  const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+
+  const pastille = document.createElement('span');
+  pastille.className = 'sara-fly';
+  pastille.style.left = `${a.left + a.width / 2}px`;
+  pastille.style.top = `${a.top + a.height / 2}px`;
+  document.body.appendChild(pastille);
+
+  // Trajectoire en cloche : le point médian remonte, sinon le trajet est plat
+  // et se lit mal quand départ et arrivée sont presque à la même hauteur.
+  const animation = pastille.animate(
+    [
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 90}px) scale(1.25)`, opacity: 1, offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0.25 },
+    ],
+    { duration: 650, easing: 'cubic-bezier(.42,0,.35,1)', fill: 'forwards' }
+  );
+
+  const nettoyer = () => {
+    pastille.remove();
+    cible.classList.remove('cart-bump');
+    // reflow : sans ça, ré-ajouter la classe aussitôt ne relance pas l'animation
+    void cible.offsetWidth;
+    cible.classList.add('cart-bump');
+    setTimeout(() => cible.classList.remove('cart-bump'), 500);
+  };
+  animation.addEventListener('finish', nettoyer);
+  animation.addEventListener('cancel', () => pastille.remove());
+}
+
 /* Reprise typographique du logo, là où l'image ne passe pas
    (tiroir mobile, pied de page). */
 function Wordmark({ className = '' }) {
@@ -249,11 +306,26 @@ function Wordmark({ className = '' }) {
 /*  Header — clair, pour que le logo (badge noir) soit à son avantage  */
 /* ------------------------------------------------------------------ */
 
-function Header() {
+/* `sticky` : sur la page Carte, l'en-tête reste accroché en haut — c'est là
+   qu'on ajoute des plats, et la pastille qui vole a besoin d'une cible
+   visible en permanence. */
+function Header({ sticky = false }) {
   const [mobile, setMobile] = useState(false);
+  const [defile, setDefile] = useState(false);
   const { count, openCart } = useCart();
+
+  useEffect(() => {
+    if (!sticky) { setDefile(false); return; }
+    const onScroll = () => setDefile(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [sticky]);
+
   return (
-    <header className="relative z-50 bg-sara-paper">
+    <header
+      className={`z-50 bg-sara-paper transition-shadow ${sticky ? 'sticky top-0' : 'relative'} ${defile ? 'shadow-[0_10px_30px_-18px_rgba(13,22,8,.65)]' : ''}`}
+    >
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <div className="h-24 grid grid-cols-3 items-center">
           {/* Gauche : menu ☰ */}
@@ -272,6 +344,7 @@ function Header() {
           <div className="flex justify-end items-center gap-2 sm:gap-3">
             <button
               type="button"
+              id={CART_ANCHOR_ID}
               onClick={openCart}
               className="sara-iconbtn relative"
               aria-label={count ? `Panier, ${count} article${count > 1 ? 's' : ''}` : 'Panier (vide)'}
@@ -798,15 +871,18 @@ function ProductCard({ p }) {
      accroche l'œil. Les autres restent blanches pour laisser la couleur aux
      photos des plats. */
   const f = p.id === FEATURED_ID;
-  const { addItem, openCart } = useCart();
+  const { addItem } = useCart();
 
   /* `desc` est OBLIGATOIRE, même vide : le panier ne fusionne deux lignes que
      si nom + prix + desc sont identiques. L'omettre ferait fusionner deux
      personnalisations différentes du même plat (bug déjà vécu chez Flash
      Pizzas). Le catalogue n'a pas encore d'options, donc '' pour l'instant. */
-  const ajouter = () => {
+  const ajouter = (e) => {
     addItem({ name: p.name, price: p.price, desc: '', emoji: p.emoji });
-    openCart();
+    // La pastille qui vole sert de confirmation : plus besoin d'ouvrir le
+    // tiroir à chaque ajout, ce qui coupait le parcours de celui qui compose
+    // une commande de plusieurs plats.
+    volVersLePanier(e.currentTarget);
   };
   return (
     <article className={`rounded-3xl overflow-hidden flex flex-col ${f ? 'bg-sara-green gold-frame shadow-[0_20px_44px_-24px_rgba(32,56,24,.85)]' : 'card-light'}`}>
@@ -993,7 +1069,7 @@ export default function SaraSite() {
   return (
     <div className="sara-root min-h-screen">
       <a href={MENU_ROUTE} className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-red focus:text-white">Aller au menu</a>
-      <Header />
+      <Header sticky={isMenu} />
       <CartDrawer />
       {isMenu ? (
         <MenuPage />

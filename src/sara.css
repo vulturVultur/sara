@@ -168,6 +168,41 @@
 .sara-iconbtn:active { transform: scale(.94); }
 
 /* ------------------------------------------------------------------ */
+/*  Ajout au panier : la pastille rouge qui vole vers l'icône          */
+/* ------------------------------------------------------------------ */
+
+/* Pastille éphémère, posée sur <body> le temps du vol puis retirée.
+   `position: fixed` car les coordonnées viennent de getBoundingClientRect(),
+   qui est relatif au viewport — en `absolute` elle se décalerait de toute la
+   hauteur déjà défilée. */
+.sara-fly {
+  position: fixed;
+  /* au-dessus de l'en-tête collant (50) ET du tiroir (80) : la pastille doit
+     rester visible jusqu'au bout, y compris en arrivant sur sa cible. */
+  z-index: 90;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: -0.55rem 0 0 -0.55rem; /* centre la pastille sur le point de départ */
+  border-radius: 9999px;
+  background: #C60101;
+  box-shadow: 0 0 0 3px rgba(198, 1, 1, .22), 0 6px 14px -4px rgba(13, 22, 8, .5);
+  pointer-events: none;
+}
+
+/* Petit sursaut de la pastille du panier à l'arrivée */
+@keyframes sara-bump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.45); }
+  70%  { transform: scale(.92); }
+  100% { transform: scale(1); }
+}
+.cart-bump { animation: sara-bump .45s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-bump { animation: none; }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Vague (wave) de séparation entre sections                           */
 /* ------------------------------------------------------------------ */
 .sara-wave {

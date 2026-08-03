@@ -1,5 +1,23 @@
 # Journal de bord — SARA
 
+## 2026-08-03 (2) — en-tête collant sur la Carte + pastille qui vole
+**Fait** : l'en-tête devient `sticky` sur la page Carte uniquement (prop
+`sticky`, ombre au défilement) ; au clic sur « Commander », une pastille rouge
+part du bouton et rejoint l'icône panier en cloche, puis la pastille du compteur
+fait un petit sursaut. Le tiroir ne s'ouvre plus automatiquement à chaque ajout :
+l'animation sert de confirmation.
+**Suivant** : inchangé (connexion, tunnel, suivi, compte — bloqués sur `.env`).
+**Décisions** :
+- En-tête collant sur la Carte seulement : c'est là qu'on ajoute des plats et
+  que la cible du vol doit rester visible. Une ligne à changer pour l'étendre
+  à tout le site (`<Header sticky={isMenu} />` → `sticky`).
+- L'animation respecte `prefers-reduced-motion` et s'abstient si la cible est
+  hors écran — elle est décorative, l'ajout au panier a déjà eu lieu.
+- **Piège de capture** : Chrome headless annonce `prefers-reduced-motion:
+  reduce`. Toute animation correctement codée s'y désactive, et la capture
+  paraît « cassée » sans raison. Forcer `Emulation.setEmulatedMedia` avant de
+  photographier une animation.
+
 ## 2026-08-03 — fusion backend + panier fonctionnel (non poussé)
 **Fait** : `origin/main` (backend Phases 0-5) fusionné dans
 `design/charte-graphique` — les deux partaient du même commit `a4c1f76`,
