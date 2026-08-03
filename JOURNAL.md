@@ -1,5 +1,21 @@
 # Journal de bord — SARA
 
+## 2026-08-03 (5) — paiement carte : le brief frontend est terminé
+`@stripe/react-stripe-js` installé, clés Stripe test en place. Le tunnel propose
+« Sur place » ou « Carte bancaire » ; la carte ouvre l'Embedded Checkout de
+Stripe (vérifié : 4 iframes Stripe chargées contre la vraie API, panier
+conservé tant que le paiement n'est pas confirmé).
+**Décisions** :
+- Le choix « Carte » n'apparaît que si `VITE_STRIPE_PUBLISHABLE_KEY` est
+  configurée — sinon le bouton mènerait à une erreur incompréhensible.
+- Le panier n'est **pas** vidé au lancement du paiement : c'est le webhook
+  Stripe qui crée la commande, une fois le paiement confirmé.
+- **Non prouvé en local** : un paiement mené jusqu'au bout. Le webhook a besoin
+  d'une URL publique ; en local la commande ne serait donc pas créée après
+  paiement. Vérifié en prod par Ayoub (cf. CLAUDE.md Phase 3).
+- `.gitignore` durci : `.env*` + `!.env.example`. La règle `.env` seule ne
+  couvrait ni `.env.bak` ni `.env.prod` — testé sur 5 variantes.
+
 ## 2026-08-03 (4) — brief d'Ayoub terminé, prouvé contre la vraie base
 `.env` rempli avec les identifiants Supabase → `/api/health` répond `{"ok":true}`.
 Les 6 étapes du brief frontend sont faites, chacune **vérifiée contre la vraie

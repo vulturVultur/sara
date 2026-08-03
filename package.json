@@ -11,6 +11,8 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.8.0",
+    "@stripe/stripe-js": "^9.12.1",
     "@supabase/supabase-js": "^2.106.1",
     "express": "^4.21.2",
     "helmet": "^8.2.0",

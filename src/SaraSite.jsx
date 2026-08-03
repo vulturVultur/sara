@@ -12,6 +12,15 @@ import { useCart } from './contexts/CartContext.jsx';
 import { useAuth } from './contexts/AuthContext.jsx';
 import { useOrderStatus } from './hooks/useOrderStatus.js';
 import { useOrders } from './hooks/useOrders.js';
+import { loadStripe } from '@stripe/stripe-js';
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
+
+/* Clé PUBLIABLE (pk_) — elle est faite pour partir dans le navigateur.
+   loadStripe est appelé une seule fois, hors composant : le relancer à chaque
+   rendu recréerait le script Stripe. Null si la clé n'est pas configurée, ce
+   qui masque proprement le paiement carte au lieu de planter. */
+const CLE_STRIPE = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = CLE_STRIPE ? loadStripe(CLE_STRIPE) : null;
 
 /* ------------------------------------------------------------------ */
 /*  Charte graphique                                                   */
@@ -810,7 +819,7 @@ const TYPES_COMMANDE = [
 
 function CheckoutPage() {
   const { user, isLoading } = useAuth();
-  const { items, total, count, placeOrder } = useCart();
+  const { items, total, count, placeOrder, createStripeCheckout } = useCart();
 
   const [type, setType] = useState('emporter');
   const [address, setAddress] = useState('');
@@ -818,6 +827,8 @@ function CheckoutPage() {
   const [erreur, setErreur] = useState('');
   const [champFautif, setChampFautif] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [paiement, setPaiement] = useState('especes');
+  const [clientSecret, setClientSecret] = useState(null);
 
   // Pré-remplissage depuis le profil : personne n'aime retaper son adresse.
   useEffect(() => {
@@ -871,12 +882,22 @@ function CheckoutPage() {
       setChampFautif('address'); return;
     }
     setEnvoi(true);
+    const donnees = {
+      orderType: type,
+      address: type === 'livraison' ? address.trim() : '',
+      phone: phone.trim(),
+    };
     try {
-      const commande = await placeOrder({
-        orderType: type,
-        address: type === 'livraison' ? address.trim() : '',
-        phone: phone.trim(),
-      });
+      if (paiement === 'carte') {
+        // La commande n'est PAS créée ici : c'est le webhook Stripe qui la crée
+        // une fois le paiement confirmé. On n'affiche donc pas de suivi tant
+        // que le paiement n'a pas abouti, et le panier n'est pas vidé.
+        const { clientSecret: cs } = await createStripeCheckout(donnees);
+        setClientSecret(cs);
+        setEnvoi(false);
+        return;
+      }
+      const commande = await placeOrder(donnees);
       // placeOrder vide le panier au succès. On enchaîne sur le suivi.
       window.location.hash = `${TRACK_ROUTE}/${commande.id}`;
     } catch (e2) {
@@ -888,6 +909,31 @@ function CheckoutPage() {
       setEnvoi(false);
     }
   };
+
+  /* Paiement carte : Stripe prend la main. On sort du formulaire pour laisser
+     le champ libre à son iframe, avec un retour arrière possible. */
+  if (clientSecret) {
+    return (
+      <PageEtroite retourHref={MENU_ROUTE} retourLabel="Retour à la carte" eyebrow="Paiement sécurisé" titre="Régler par carte">
+        <button
+          type="button"
+          onClick={() => setClientSecret(null)}
+          className="mt-4 inline-flex items-center gap-1.5 py-1.5 text-sm font-semibold text-sara-muted hover:text-sara-red transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Modifier ma commande
+        </button>
+        <div className="card-light rounded-3xl mt-4 p-3 sm:p-4 overflow-hidden">
+          <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+            <EmbeddedCheckout />
+          </EmbeddedCheckoutProvider>
+        </div>
+        <p className="mt-3 text-center text-xs text-sara-muted">
+          Votre carte est seulement <strong>autorisée</strong> : elle n'est débitée
+          qu'au moment où le restaurant accepte la commande.
+        </p>
+      </PageEtroite>
+    );
+  }
 
   return (
     <PageEtroite retourHref={MENU_ROUTE} retourLabel="Retour à la carte" eyebrow="Dernière étape" titre="Votre commande">
@@ -960,15 +1006,42 @@ function CheckoutPage() {
           </div>
         </div>
 
+        {/* Mode de paiement — la carte n'apparaît que si la clé publiable est
+            configurée, sinon le bouton mènerait à une erreur incompréhensible. */}
+        <fieldset className="card-light rounded-3xl p-5 sm:p-6">
+          <legend className="sara-label px-1">Paiement</legend>
+          <div className={`grid gap-3 mt-2 ${stripePromise ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {[
+              { id: 'especes', label: 'Sur place', desc: type === 'livraison' ? 'À la livraison' : 'Au retrait' },
+              ...(stripePromise ? [{ id: 'carte', label: 'Carte bancaire', desc: 'Débitée à l’acceptation' }] : []),
+            ].map(({ id, label, desc }) => {
+              const actif = paiement === id;
+              return (
+                <button
+                  key={id} type="button" onClick={() => setPaiement(id)} aria-pressed={actif}
+                  className={`rounded-2xl p-4 text-left border-2 transition ${actif ? 'border-sara-red bg-sara-red/5' : 'border-sara-green/15 hover:border-sara-green/35'}`}
+                >
+                  <span className={`block font-display text-lg ${actif ? 'text-sara-red' : 'text-sara-green'}`}>{label}</span>
+                  <span className="block text-xs text-sara-muted mt-0.5">{desc}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
         <button
           type="submit"
           disabled={envoi}
           className="w-full inline-flex items-center justify-center gap-2 px-7 py-4 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {envoi ? 'Envoi de la commande…' : <><Flame className="w-5 h-5" /> Confirmer ma commande</>}
+          {envoi ? 'Un instant…' : paiement === 'carte'
+            ? <>Payer {formatChf(total)} par carte</>
+            : <><Flame className="w-5 h-5" /> Confirmer ma commande</>}
         </button>
         <p className="text-center text-xs text-sara-muted">
-          Paiement sur place ou à la livraison. Le paiement par carte arrivera prochainement.
+          {paiement === 'carte'
+            ? "Votre carte est autorisée maintenant, débitée seulement si le restaurant accepte."
+            : 'Vous réglez directement au restaurant ou au livreur.'}
         </p>
       </form>
     </PageEtroite>
