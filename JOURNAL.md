@@ -1,5 +1,57 @@
 # Journal de bord — SARA
 
+## 2026-08-03 (4) — brief d'Ayoub terminé, prouvé contre la vraie base
+`.env` rempli avec les identifiants Supabase → `/api/health` répond `{"ok":true}`.
+Les 6 étapes du brief frontend sont faites, chacune **vérifiée contre la vraie
+base**, données de test supprimées après coup (base laissée à 0 utilisateur,
+0 commande).
+**Fait** :
+- étape 3 prouvée : compte réellement créé, session serveur active ;
+- étape 4 `#/commande` : emporter/livraison, adresse conditionnelle, récap,
+  `placeOrder()` → vraie commande en base, panier vidé, redirection vers le suivi ;
+- étape 5 `#/suivi/<id>` : 4 étapes visuelles, poll 5 s, ETA, annulation client,
+  « j'ai reçu ma commande ». Les 6 statuts serveur ont été **provoqués un par un**
+  (accepté, prêt, livré, refusé par le resto, annulé par le client) ;
+- étape 6 `#/compte` : historique, favoris (cœur sur la carte), profil, mot de
+  passe — tous persistés et revérifiés côté serveur ;
+- `#/reservation` et `#/reservation/chicha` : les boutons « Réserver » ne
+  pointent plus vers le pied de page.
+**Suivant** : paiement carte (Stripe) — seul morceau du brief non fait, il
+manque `STRIPE_SECRET_KEY` + `VITE_STRIPE_PUBLISHABLE_KEY` et
+`npm i @stripe/react-stripe-js @stripe/stripe-js`.
+**Décisions** :
+- **Réservation : aucune route serveur n'existe** (vérifié, les seules routes
+  sont auth/me/orders/stripe/track/admin) et aucune table `reservations`.
+  L'écran ne prétend donc rien enregistrer : il compose la demande et l'envoie
+  par le **seul canal réel** — appel ou SMS pré-rempli. Le jour où Ayoub ajoute
+  `POST /api/reservations`, seule la fonction d'envoi change.
+- `useOrders()` créé dans `src/hooks/` : le brief laissait le choix entre un
+  `fetch` direct dans l'écran et un hook. Le hook évite d'éparpiller des appels
+  réseau dans le JSX, ce que le projet s'interdit par ailleurs.
+- Le cœur des favoris n'apparaît **que connecté** : sans compte,
+  `toggleFavorite` renverrait 401 et le clic semblerait cassé.
+- **Piège de configuration** : `.env.example` livre `NODE_ENV=production`
+  pré-rempli. En local, le cookie de session reçoit alors le drapeau `Secure`
+  et `http://localhost` le refuse → connexion « réussie » puis déconnexion
+  immédiate, sans message. La ligne est commentée dans le `.env` local.
+
+## Le brief frontend d'Ayoub — écarts avec le dépôt réel (constaté 2026-08-03)
+Trois affirmations du brief `docs/brief-frontend-collegue.md` ne sont plus vraies.
+À corriger dans le brief, ou au moins à savoir avant de le suivre :
+- « la clé publique est déjà dans `.env` sous `VITE_STRIPE_PUBLISHABLE_KEY` » —
+  **il n'y a pas de `.env` local**, seulement `.env.example`. Et aucun code ne
+  lit encore cette variable.
+- « Respecte la charte Sara existante (`sara.red/cream/orange/brown`) » — ces
+  jetons **n'existent plus** : la charte du patron (vert/or/rouge) les a
+  remplacés, et elle est dans `main` depuis la PR #9.
+- « ~ligne 582 de `SaraSite.jsx` » — le fichier fait 1322 lignes, la ligne 582
+  est ailleurs. Repérer par nom de composant (`ProductCard`), pas par numéro.
+
+Ce qui n'est **pas** dans le brief et qui compte : `removeItem(ligne)` et
+`updateQty(ligne, qty)` prennent la **ligne entière**, pas un id (comparaison
+`sameLine` sur nom+prix+desc). Leur passer un id ne lève aucune erreur et ne
+fait rien.
+
 ## 2026-08-03 (3) — écrans connexion / inscription + passe responsive
 **Fait** : routes `#/connexion` et `#/inscription` (composant `AuthPage`)
 branchées sur `login()` / `register()`. Le pied du panier propose « Créez un
