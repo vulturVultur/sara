@@ -168,6 +168,72 @@
 .sara-iconbtn:active { transform: scale(.94); }
 
 /* ------------------------------------------------------------------ */
+/*  Formulaires (connexion, inscription, commande)                      */
+/* ------------------------------------------------------------------ */
+.sara-label {
+  display: block;
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #5F6B57;
+  margin-bottom: .35rem;
+}
+.sara-input {
+  width: 100%;
+  /* 16px minimum : en dessous, iOS zoome automatiquement sur le champ au
+     focus et casse la mise en page. */
+  font-size: 1rem;
+  padding: .75rem 1rem;
+  border-radius: .9rem;
+  background: #FFFFFF;
+  border: 1px solid rgba(32, 56, 24, .18);
+  color: #203818;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.sara-input::placeholder { color: rgba(95, 107, 87, .55); }
+.sara-input:focus {
+  outline: none;
+  border-color: #B67614;
+  box-shadow: 0 0 0 3px rgba(182, 118, 20, .18);
+}
+.sara-input[aria-invalid='true'] {
+  border-color: #C60101;
+  box-shadow: 0 0 0 3px rgba(198, 1, 1, .14);
+}
+.sara-hint { font-size: .78rem; color: #5F6B57; margin-top: .3rem; }
+.sara-error {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .75rem 1rem;
+  border-radius: .9rem;
+  background: rgba(198, 1, 1, .08);
+  border: 1px solid rgba(198, 1, 1, .35);
+  color: #8F0101;
+  font-size: .9rem;
+  font-weight: 500;
+}
+
+/* Points de carrousel : le rond visible reste petit (8 px), mais la zone
+   touchable est étendue par un pseudo-élément qui déborde SANS occuper de
+   place dans la mise en page. Autrement il faudrait des boutons de 44 px,
+   qui écarteraient les points et abîmeraient le rythme visuel. */
+.sara-dot { position: relative; }
+.sara-dot::after {
+  content: '';
+  position: absolute;
+  inset: -1rem -0.5rem;
+}
+
+/* Anneau de focus visible au clavier, aux couleurs de la charte */
+.sara-root :focus-visible {
+  outline: 2px solid #B67614;
+  outline-offset: 2px;
+  border-radius: .35rem;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Ajout au panier : la pastille rouge qui vole vers l'icône          */
 /* ------------------------------------------------------------------ */
 

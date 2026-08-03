@@ -1,5 +1,32 @@
 # Journal de bord — SARA
 
+## 2026-08-03 (3) — écrans connexion / inscription + passe responsive
+**Fait** : routes `#/connexion` et `#/inscription` (composant `AuthPage`)
+branchées sur `login()` / `register()`. Le pied du panier propose « Créez un
+compte » tant que le client n'est pas connecté, et le bouton de commande
+seulement une fois connecté. Icône compte de l'en-tête branchée (initiale du
+prénom si session ouverte). Passe responsive vérifiée en 320 / 375 / 768 /
+1024 / 1440 : zéro débordement horizontal partout.
+**En cours** : rien.
+**Suivant** : tunnel de commande (`placeOrder` cash, `createStripeCheckout`
+carte), suivi de commande, espace `/compte` — tous bloqués sur les valeurs
+`.env` (Supabase + Stripe test).
+**Décisions** :
+- **Pas de lien « mot de passe oublié »** : aucune route serveur ne l'implémente
+  (`server/api.ts` n'a ni `forgot` ni `reset`). Un lien mort vaut moins que pas
+  de lien. À demander à Ayoub s'il faut l'ajouter côté backend.
+- Les messages d'erreur techniques du serveur (500 « Erreur serveur »,
+  « Requête échouée ») sont remplacés par une phrase actionnable ; les messages
+  métier (« Cet email est déjà utilisé ») passent tels quels.
+- Zones tactiles : les points de carrousel gardent leur taille visuelle (8 px)
+  mais gagnent une zone touchable étendue via `.sara-dot::after`, qui déborde
+  sans occuper de place — des boutons de 44 px auraient écarté les points et
+  cassé le rythme.
+- **Non prouvé** : la création de compte et la connexion réelles. Le serveur
+  local répond 500 faute d'identifiants Supabase. Tout le reste du parcours est
+  exercé ; la variante « connecté » est vérifiée en injectant une session
+  simulée au chargement (échafaudage hors dépôt).
+
 ## 2026-08-03 (2) — en-tête collant sur la Carte + pastille qui vole
 **Fait** : l'en-tête devient `sticky` sur la page Carte uniquement (prop
 `sticky`, ombre au défilement) ; au clic sur « Commander », une pastille rouge

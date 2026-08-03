@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './sara.css';
 import {
   Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
-  ChevronDown, Flame, Minus, Plus, Trash2, ShoppingCart,
+  ChevronDown, Flame, Minus, Plus, Trash2, ShoppingCart, AlertCircle, UserPlus,
   MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
   ShoppingBag, User,
 } from 'lucide-react';
 import { MENU_CATEGORIES, MENU_ITEMS, categoryLabel, formatChf } from './data/menuItems';
 import { useCart } from './contexts/CartContext.jsx';
+import { useAuth } from './contexts/AuthContext.jsx';
 
 /* ------------------------------------------------------------------ */
 /*  Charte graphique                                                   */
@@ -68,8 +69,10 @@ const INFO = {
 /* Spécialités affichées en bandeau du hero — reprise de l'enseigne. */
 const SPECIALITES = ['Kebab', 'Pizza', 'Grill', 'Shisha Bar'];
 
-/* Route de la page Menu (routage par hash) */
+/* Routes (routage par hash, fait main) */
 const MENU_ROUTE = '#/carte';
+const LOGIN_ROUTE = '#/connexion';
+const REGISTER_ROUTE = '#/inscription';
 
 /* Filtres de la page Menu : "Tout" (pseudo-catégorie, UI seulement) + les
    vraies catégories du catalogue (src/data/menuItems.ts, source unique). */
@@ -313,6 +316,7 @@ function Header({ sticky = false }) {
   const [mobile, setMobile] = useState(false);
   const [defile, setDefile] = useState(false);
   const { count, openCart } = useCart();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!sticky) { setDefile(false); return; }
@@ -356,7 +360,15 @@ function Header({ sticky = false }) {
                 </span>
               )}
             </button>
-            <a href="#contact" className="sara-iconbtn" aria-label="Mon compte"><User className="w-5 h-5" /></a>
+            <a
+              href={user ? LOGIN_ROUTE : REGISTER_ROUTE}
+              className="sara-iconbtn"
+              aria-label={user ? `Mon compte (${user.prenom || user.email})` : 'Créer un compte ou se connecter'}
+            >
+              {user
+                ? <span className="font-display text-sm leading-none">{(user.prenom || user.email).charAt(0).toUpperCase()}</span>
+                : <User className="w-5 h-5" />}
+            </a>
           </div>
         </div>
       </div>
@@ -442,6 +454,7 @@ function CartLine({ line }) {
 
 function CartDrawer() {
   const { items, count, total, isCartOpen, closeCart, clearCart } = useCart();
+  const { user } = useAuth();
 
   // Échap pour fermer + blocage du défilement de la page derrière le tiroir.
   useEffect(() => {
@@ -510,19 +523,40 @@ function CartDrawer() {
               <span className="font-display text-3xl text-sara-green tabular-nums">{formatChf(total)}</span>
             </div>
 
-            {/* Le tunnel de commande (emporter/livraison, paiement) est l'étape
-                suivante du brief : le bouton reste inactif plutôt que de
-                pointer vers une route qui n'existe pas encore. */}
-            <button
-              type="button"
-              disabled
-              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white opacity-50 cursor-not-allowed"
-            >
-              <Flame className="w-5 h-5" /> Passer commande
-            </button>
-            <p className="mt-2 text-center text-xs text-sara-muted">
-              Le tunnel de commande et le paiement arrivent à la prochaine étape.
-            </p>
+            {/* Tant que le client n'est pas connecté, le panier ne propose pas
+                de payer mais de créer un compte : c'est la porte d'entrée du
+                parcours de commande. Une fois connecté, place au tunnel — qui
+                reste à construire, d'où le bouton encore inactif. */}
+            {!user ? (
+              <>
+                <a
+                  href={REGISTER_ROUTE}
+                  onClick={closeCart}
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition"
+                >
+                  <UserPlus className="w-5 h-5" /> Créez un compte
+                </a>
+                <p className="mt-2 text-center text-xs text-sara-muted">
+                  Un compte permet de suivre votre commande en direct.{' '}
+                  <a href={LOGIN_ROUTE} onClick={closeCart} className="font-semibold text-sara-red hover:underline">
+                    Déjà client ?
+                  </a>
+                </p>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white opacity-50 cursor-not-allowed"
+                >
+                  <Flame className="w-5 h-5" /> Passer commande
+                </button>
+                <p className="mt-2 text-center text-xs text-sara-muted">
+                  Bonjour {user.prenom || 'à vous'} — le tunnel de commande et le paiement arrivent à la prochaine étape.
+                </p>
+              </>
+            )}
 
             <button
               type="button"
@@ -535,6 +569,195 @@ function CartDrawer() {
         )}
       </aside>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Connexion / inscription                                            */
+/* ------------------------------------------------------------------ */
+
+/* Mêmes règles que server/api.ts — validées ici pour une réponse immédiate,
+   mais c'est le serveur qui fait foi (ces contrôles sont du confort, pas de
+   la sécurité). */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MDP_MIN = 8;
+
+function Champ({ id, label, hint, erreur, className = '', ...props }) {
+  return (
+    <div className={className}>
+      <label className="sara-label" htmlFor={id}>{label}</label>
+      <input id={id} className="sara-input" aria-invalid={erreur ? 'true' : undefined} {...props} />
+      {hint && <p className="sara-hint">{hint}</p>}
+    </div>
+  );
+}
+
+function AuthPage({ mode }) {
+  const inscription = mode === 'register';
+  const { user, isLoading, login, register, logout } = useAuth();
+  const { count, openCart } = useCart();
+
+  const [form, setForm] = useState({ prenom: '', nom: '', email: '', phone: '', password: '', newsletter: false });
+  const [erreur, setErreur] = useState('');
+  const [champFautif, setChampFautif] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  // Repartir d'un formulaire propre quand on bascule connexion <-> inscription
+  useEffect(() => { setErreur(''); setChampFautif(''); }, [mode]);
+
+  const soumettre = async (e) => {
+    e.preventDefault();
+    setErreur(''); setChampFautif('');
+
+    if (inscription && !form.prenom.trim()) { setErreur('Votre prénom est nécessaire.'); setChampFautif('prenom'); return; }
+    if (inscription && !form.nom.trim()) { setErreur('Votre nom est nécessaire.'); setChampFautif('nom'); return; }
+    if (!EMAIL_RE.test(form.email.trim())) { setErreur('Cette adresse e-mail ne semble pas valide.'); setChampFautif('email'); return; }
+    if (inscription && form.password.length < MDP_MIN) {
+      setErreur(`Le mot de passe doit faire au moins ${MDP_MIN} caractères.`); setChampFautif('password'); return;
+    }
+    if (!form.password) { setErreur('Le mot de passe est nécessaire.'); setChampFautif('password'); return; }
+
+    setEnvoi(true);
+    try {
+      if (inscription) {
+        await register({
+          email: form.email.trim(),
+          password: form.password,
+          prenom: form.prenom.trim(),
+          nom: form.nom.trim(),
+          phone: form.phone.trim() || undefined,
+          newsletter: form.newsletter,
+        });
+      } else {
+        await login(form.email.trim(), form.password);
+      }
+      // Retour au panier si une commande était en cours, sinon à l'accueil.
+      if (count > 0) { window.location.hash = MENU_ROUTE; openCart(); }
+      else { window.location.hash = '#accueil'; }
+    } catch (e2) {
+      // Les fonctions du contexte rejettent avec le message français du
+      // serveur (« Cet email est déjà utilisé », « Email ou mot de passe
+      // incorrect »…) : ceux-là sont utiles au client, on les affiche tels
+      // quels. Les messages techniques (500, panne réseau) ne lui apprennent
+      // rien et l'inquiètent : on les remplace par une phrase actionnable.
+      const brut = e2?.message ?? '';
+      const technique = !brut || /erreur (serveur|inconnue)|requ[êe]te [ée]chou/i.test(brut);
+      setErreur(technique
+        ? "Le service est momentanément indisponible. Réessayez dans un instant, ou appelez-nous pour commander."
+        : brut);
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <main className="bg-sara-paper min-h-[60vh] flex items-center justify-center px-5">
+        <p className="text-sara-muted">Chargement…</p>
+      </main>
+    );
+  }
+
+  if (user) {
+    return (
+      <main className="bg-sara-paper px-5 py-16 md:py-24">
+        <div className="card-light rounded-3xl max-w-md mx-auto p-6 sm:p-8 text-center">
+          <span className="w-14 h-14 rounded-full bg-sara-green text-sara-cream font-display text-2xl flex items-center justify-center mx-auto" aria-hidden="true">
+            {(user.prenom || user.email || '?').charAt(0).toUpperCase()}
+          </span>
+          <h1 className="heading text-sara-green text-3xl mt-4">Vous êtes connecté</h1>
+          <p className="mt-2 text-sara-muted">
+            {user.prenom ? `${user.prenom} ${user.nom ?? ''}`.trim() : user.email}
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <PillLink href={MENU_ROUTE} variant="red" className="justify-center"><Flame className="w-5 h-5" /> Voir la carte</PillLink>
+            <button
+              type="button"
+              onClick={logout}
+              className="px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none border border-sara-green/20 text-sara-green hover:border-sara-red hover:text-sara-red transition"
+            >
+              Se déconnecter
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="bg-sara-paper px-5 py-12 md:py-20">
+      <div className="max-w-md mx-auto">
+        <div className="text-center">
+          <Eyebrow className="text-sara-goldDeep">{inscription ? 'Bienvenue chez Sara' : 'Content de vous revoir'}</Eyebrow>
+          <h1 className="heading text-sara-green text-3xl sm:text-4xl mt-3">
+            {inscription ? 'Créez votre compte' : 'Connectez-vous'}
+          </h1>
+          <p className="mt-3 text-sara-muted text-sm">
+            {inscription
+              ? 'Un compte permet de suivre vos commandes en direct et de retrouver vos plats favoris.'
+              : 'Retrouvez vos commandes en cours et vos plats favoris.'}
+          </p>
+        </div>
+
+        <form onSubmit={soumettre} className="card-light rounded-3xl mt-8 p-5 sm:p-7 space-y-4" noValidate>
+          {erreur && (
+            <p className="sara-error" role="alert">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+              <span>{erreur}</span>
+            </p>
+          )}
+
+          {inscription && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Champ id="prenom" label="Prénom" type="text" autoComplete="given-name" required
+                value={form.prenom} onChange={set('prenom')} erreur={champFautif === 'prenom'} placeholder="Sara" />
+              <Champ id="nom" label="Nom" type="text" autoComplete="family-name" required
+                value={form.nom} onChange={set('nom')} erreur={champFautif === 'nom'} placeholder="Yilmaz" />
+            </div>
+          )}
+
+          <Champ id="email" label="Adresse e-mail" type="email" autoComplete="email" required inputMode="email"
+            value={form.email} onChange={set('email')} erreur={champFautif === 'email'} placeholder="vous@exemple.ch" />
+
+          {inscription && (
+            <Champ id="phone" label="Téléphone (facultatif)" type="tel" autoComplete="tel" inputMode="tel"
+              value={form.phone} onChange={set('phone')} placeholder="079 000 00 00"
+              hint="Utile si le restaurant doit vous joindre pour une livraison." />
+          )}
+
+          <Champ id="password" label="Mot de passe" type="password" required
+            autoComplete={inscription ? 'new-password' : 'current-password'}
+            value={form.password} onChange={set('password')} erreur={champFautif === 'password'}
+            hint={inscription ? `${MDP_MIN} caractères minimum.` : undefined} />
+
+          {inscription && (
+            <label className="flex items-start gap-2.5 text-sm text-sara-muted cursor-pointer">
+              <input type="checkbox" checked={form.newsletter} onChange={set('newsletter')}
+                className="mt-0.5 w-4 h-4 accent-[#C60101]" />
+              <span>Je souhaite recevoir les offres et nouveautés de Sara.</span>
+            </label>
+          )}
+
+          <button
+            type="submit"
+            disabled={envoi}
+            className="w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {envoi ? 'Un instant…' : (inscription ? 'Créer mon compte' : 'Se connecter')}
+            {!envoi && <ArrowUpRight className="w-5 h-5" />}
+          </button>
+        </form>
+
+        <p className="mt-5 text-center text-sm text-sara-muted">
+          {inscription ? 'Vous avez déjà un compte ? ' : 'Pas encore de compte ? '}
+          <a href={inscription ? LOGIN_ROUTE : REGISTER_ROUTE} className="inline-block py-1.5 font-semibold text-sara-red hover:underline">
+            {inscription ? 'Se connecter' : 'Créez-en un'}
+          </a>
+        </p>
+      </div>
+    </main>
   );
 }
 
@@ -613,7 +836,7 @@ function Hero() {
         </div>
         <div className="mt-8 flex justify-center gap-2">
           {HERO_DISHES.map((_, i) => (
-            <button key={i} onClick={() => setIdx(i)} className={`h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-sara-red' : 'w-2 bg-sara-green/20'}`} aria-label={`Plat ${i + 1}`} />
+            <button key={i} onClick={() => setIdx(i)} className={`sara-dot h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-sara-red' : 'w-2 bg-sara-green/20'}`} aria-label={`Plat ${i + 1}`} />
           ))}
         </div>
       </div>
@@ -740,7 +963,7 @@ function Chicha() {
             <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-sara-ink/70 border border-sara-goldLight/50 text-sara-cream flex items-center justify-center hover:bg-sara-red hover:border-sara-red transition" aria-label="Photo suivante"><ChevronRight className="w-5 h-5" /></button>
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
               {CHICHA_PHOTOS.map((_, idx) => (
-                <button key={idx} onClick={() => setI(idx)} className={`h-2 rounded-full transition-all ${idx === i ? 'w-7 bg-sara-gold' : 'w-2 bg-sara-cream/40'}`} aria-label={`Photo ${idx + 1}`} />
+                <button key={idx} onClick={() => setI(idx)} className={`sara-dot h-2 rounded-full transition-all ${idx === i ? 'w-7 bg-sara-gold' : 'w-2 bg-sara-cream/40'}`} aria-label={`Photo ${idx + 1}`} />
               ))}
             </div>
           </div>
@@ -998,7 +1221,9 @@ function CtaFooter() {
             </p>
             <p className="mt-3 text-sara-mutedDark flex items-center gap-2">
               <Phone className="w-4 h-4 shrink-0 text-sara-goldLight" />
-              <a href={`tel:${INFO.phone.replace(/\s/g, '')}`} className="hover:text-sara-cream transition">{INFO.phone}</a>
+              {/* Appeler est l'action la plus utile sur mobile : la cible
+                  mérite la même hauteur qu'un bouton. */}
+              <a href={`tel:${INFO.phone.replace(/\s/g, '')}`} className="inline-block py-1.5 hover:text-sara-cream transition">{INFO.phone}</a>
             </p>
           </div>
 
@@ -1031,7 +1256,7 @@ function FooterCol({ title, links }) {
       <h4 className="heading text-lg text-sara-goldLight">{title}</h4>
       <ul className="mt-4 space-y-3">
         {links.map(([h, l]) => (
-          <li key={l}><a href={h} className="text-sara-mutedDark hover:text-sara-cream transition">{l}</a></li>
+          <li key={l}><a href={h} className="inline-block py-1.5 text-sara-mutedDark hover:text-sara-cream transition">{l}</a></li>
         ))}
       </ul>
     </div>
@@ -1059,19 +1284,26 @@ function useHashRoute() {
 export default function SaraSite() {
   const hash = useHashRoute();
   const isMenu = hash.startsWith(MENU_ROUTE);
+  const isRegister = hash.startsWith(REGISTER_ROUTE);
+  const isLogin = hash.startsWith(LOGIN_ROUTE);
+  const isAuth = isRegister || isLogin;
+  // Toute route « page » (#/…) part du haut ; les ancres (#faq) défilent.
+  const estUnePage = isMenu || isAuth;
 
   useEffect(() => {
-    if (isMenu) { window.scrollTo(0, 0); return; }
+    if (estUnePage) { window.scrollTo(0, 0); return; }
     const id = hash.replace(/^#\/?/, '');
     if (id) { const el = document.getElementById(id); if (el) el.scrollIntoView(); }
-  }, [hash, isMenu]);
+  }, [hash, estUnePage]);
 
   return (
     <div className="sara-root min-h-screen">
       <a href={MENU_ROUTE} className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-red focus:text-white">Aller au menu</a>
       <Header sticky={isMenu} />
       <CartDrawer />
-      {isMenu ? (
+      {isAuth ? (
+        <AuthPage mode={isRegister ? 'register' : 'login'} />
+      ) : isMenu ? (
         <MenuPage />
       ) : (
         <main>
