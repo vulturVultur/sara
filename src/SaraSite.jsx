@@ -2,12 +2,25 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './sara.css';
 import {
   Menu as MenuIcon, X, ArrowUpRight, ChevronLeft, ChevronRight,
-  ChevronDown, Flame, Minus, Plus, Trash2, ShoppingCart,
+  ChevronDown, Flame, Minus, Plus, Trash2, ShoppingCart, AlertCircle, UserPlus,
+  Check, Clock, XCircle, ArrowLeft, Bike, ChefHat, Store, Heart,
   MapPin, Phone, Youtube, Twitter, Instagram, Linkedin,
   ShoppingBag, User,
 } from 'lucide-react';
 import { MENU_CATEGORIES, MENU_ITEMS, categoryLabel, formatChf } from './data/menuItems';
 import { useCart } from './contexts/CartContext.jsx';
+import { useAuth } from './contexts/AuthContext.jsx';
+import { useOrderStatus } from './hooks/useOrderStatus.js';
+import { useOrders } from './hooks/useOrders.js';
+import { loadStripe } from '@stripe/stripe-js';
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
+
+/* Clé PUBLIABLE (pk_) — elle est faite pour partir dans le navigateur.
+   loadStripe est appelé une seule fois, hors composant : le relancer à chaque
+   rendu recréerait le script Stripe. Null si la clé n'est pas configurée, ce
+   qui masque proprement le paiement carte au lieu de planter. */
+const CLE_STRIPE = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = CLE_STRIPE ? loadStripe(CLE_STRIPE) : null;
 
 /* ------------------------------------------------------------------ */
 /*  Charte graphique                                                   */
@@ -68,8 +81,28 @@ const INFO = {
 /* Spécialités affichées en bandeau du hero — reprise de l'enseigne. */
 const SPECIALITES = ['Kebab', 'Pizza', 'Grill', 'Shisha Bar'];
 
-/* Route de la page Menu (routage par hash) */
+/* Routes (routage par hash, fait main) */
 const MENU_ROUTE = '#/carte';
+const LOGIN_ROUTE = '#/connexion';
+const REGISTER_ROUTE = '#/inscription';
+const CHECKOUT_ROUTE = '#/commande';
+/* Le suivi porte l'id en fin de route : #/suivi/<orderId>. L'id (32 car. hex)
+   fait office de secret — pas besoin d'être connecté pour suivre sa commande. */
+const TRACK_ROUTE = '#/suivi';
+const ACCOUNT_ROUTE = '#/compte';
+const RESA_ROUTE = '#/reservation';
+const RESA_CHICHA_ROUTE = '#/reservation/chicha';
+
+/* Libellés client des 6 statuts serveur. `cancelled` se lit différemment selon
+   qui a annulé — c'est la seule nuance qui change le message. */
+const LIBELLE_STATUT = {
+  pending: 'En attente de confirmation',
+  confirmed: 'En attente de confirmation',
+  preparing: 'En préparation',
+  ready: 'Prête',
+  delivered: 'Terminée',
+  cancelled: 'Annulée',
+};
 
 /* Filtres de la page Menu : "Tout" (pseudo-catégorie, UI seulement) + les
    vraies catégories du catalogue (src/data/menuItems.ts, source unique). */
@@ -234,6 +267,63 @@ function Eyebrow({ children, className = 'text-sara-goldDeep' }) {
   return <span className={`eyebrow ${className}`}>{children}</span>;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Vol de la pastille « ajouté au panier »                            */
+/* ------------------------------------------------------------------ */
+
+/* Identifiant de la cible : l'icône panier de l'en-tête. */
+const CART_ANCHOR_ID = 'sara-cart-anchor';
+
+const reduitLesAnimations = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/* Envoie une pastille rouge du bouton cliqué vers l'icône panier.
+   Purement décoratif : si la cible est absente, hors écran, ou si l'API
+   d'animation manque, on ne fait rien — l'ajout au panier a déjà eu lieu. */
+function volVersLePanier(depuis) {
+  if (!depuis || reduitLesAnimations()) return;
+  const cible = document.getElementById(CART_ANCHOR_ID);
+  if (!cible || typeof depuis.animate !== 'function') return;
+
+  const a = depuis.getBoundingClientRect();
+  const b = cible.getBoundingClientRect();
+  // Cible hors du viewport (en-tête non collant, déjà défilé) : la pastille
+  // partirait dans le vide, mieux vaut s'abstenir.
+  if (b.bottom < 0 || b.top > window.innerHeight) return;
+
+  const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
+  const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+
+  const pastille = document.createElement('span');
+  pastille.className = 'sara-fly';
+  pastille.style.left = `${a.left + a.width / 2}px`;
+  pastille.style.top = `${a.top + a.height / 2}px`;
+  document.body.appendChild(pastille);
+
+  // Trajectoire en cloche : le point médian remonte, sinon le trajet est plat
+  // et se lit mal quand départ et arrivée sont presque à la même hauteur.
+  const animation = pastille.animate(
+    [
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 90}px) scale(1.25)`, opacity: 1, offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0.25 },
+    ],
+    { duration: 650, easing: 'cubic-bezier(.42,0,.35,1)', fill: 'forwards' }
+  );
+
+  const nettoyer = () => {
+    pastille.remove();
+    cible.classList.remove('cart-bump');
+    // reflow : sans ça, ré-ajouter la classe aussitôt ne relance pas l'animation
+    void cible.offsetWidth;
+    cible.classList.add('cart-bump');
+    setTimeout(() => cible.classList.remove('cart-bump'), 500);
+  };
+  animation.addEventListener('finish', nettoyer);
+  animation.addEventListener('cancel', () => pastille.remove());
+}
+
 /* Reprise typographique du logo, là où l'image ne passe pas
    (tiroir mobile, pied de page). */
 function Wordmark({ className = '' }) {
@@ -249,11 +339,27 @@ function Wordmark({ className = '' }) {
 /*  Header — clair, pour que le logo (badge noir) soit à son avantage  */
 /* ------------------------------------------------------------------ */
 
-function Header() {
+/* `sticky` : sur la page Carte, l'en-tête reste accroché en haut — c'est là
+   qu'on ajoute des plats, et la pastille qui vole a besoin d'une cible
+   visible en permanence. */
+function Header({ sticky = false }) {
   const [mobile, setMobile] = useState(false);
+  const [defile, setDefile] = useState(false);
   const { count, openCart } = useCart();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!sticky) { setDefile(false); return; }
+    const onScroll = () => setDefile(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [sticky]);
+
   return (
-    <header className="relative z-50 bg-sara-paper">
+    <header
+      className={`z-50 bg-sara-paper transition-shadow ${sticky ? 'sticky top-0' : 'relative'} ${defile ? 'shadow-[0_10px_30px_-18px_rgba(13,22,8,.65)]' : ''}`}
+    >
       <div className="max-w-7xl mx-auto px-5 sm:px-8">
         <div className="h-24 grid grid-cols-3 items-center">
           {/* Gauche : menu ☰ */}
@@ -272,6 +378,7 @@ function Header() {
           <div className="flex justify-end items-center gap-2 sm:gap-3">
             <button
               type="button"
+              id={CART_ANCHOR_ID}
               onClick={openCart}
               className="sara-iconbtn relative"
               aria-label={count ? `Panier, ${count} article${count > 1 ? 's' : ''}` : 'Panier (vide)'}
@@ -283,7 +390,15 @@ function Header() {
                 </span>
               )}
             </button>
-            <a href="#contact" className="sara-iconbtn" aria-label="Mon compte"><User className="w-5 h-5" /></a>
+            <a
+              href={user ? ACCOUNT_ROUTE : REGISTER_ROUTE}
+              className="sara-iconbtn"
+              aria-label={user ? `Mon compte (${user.prenom || user.email})` : 'Créer un compte ou se connecter'}
+            >
+              {user
+                ? <span className="font-display text-sm leading-none">{(user.prenom || user.email).charAt(0).toUpperCase()}</span>
+                : <User className="w-5 h-5" />}
+            </a>
           </div>
         </div>
       </div>
@@ -369,6 +484,7 @@ function CartLine({ line }) {
 
 function CartDrawer() {
   const { items, count, total, isCartOpen, closeCart, clearCart } = useCart();
+  const { user } = useAuth();
 
   // Échap pour fermer + blocage du défilement de la page derrière le tiroir.
   useEffect(() => {
@@ -437,19 +553,40 @@ function CartDrawer() {
               <span className="font-display text-3xl text-sara-green tabular-nums">{formatChf(total)}</span>
             </div>
 
-            {/* Le tunnel de commande (emporter/livraison, paiement) est l'étape
-                suivante du brief : le bouton reste inactif plutôt que de
-                pointer vers une route qui n'existe pas encore. */}
-            <button
-              type="button"
-              disabled
-              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white opacity-50 cursor-not-allowed"
-            >
-              <Flame className="w-5 h-5" /> Passer commande
-            </button>
-            <p className="mt-2 text-center text-xs text-sara-muted">
-              Le tunnel de commande et le paiement arrivent à la prochaine étape.
-            </p>
+            {/* Tant que le client n'est pas connecté, le panier ne propose pas
+                de payer mais de créer un compte : c'est la porte d'entrée du
+                parcours de commande. Une fois connecté, place au tunnel — qui
+                reste à construire, d'où le bouton encore inactif. */}
+            {!user ? (
+              <>
+                <a
+                  href={REGISTER_ROUTE}
+                  onClick={closeCart}
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition"
+                >
+                  <UserPlus className="w-5 h-5" /> Créez un compte
+                </a>
+                <p className="mt-2 text-center text-xs text-sara-muted">
+                  Un compte permet de suivre votre commande en direct.{' '}
+                  <a href={LOGIN_ROUTE} onClick={closeCart} className="font-semibold text-sara-red hover:underline">
+                    Déjà client ?
+                  </a>
+                </p>
+              </>
+            ) : (
+              <>
+                <a
+                  href={CHECKOUT_ROUTE}
+                  onClick={closeCart}
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition"
+                >
+                  <Flame className="w-5 h-5" /> Passer commande
+                </a>
+                <p className="mt-2 text-center text-xs text-sara-muted">
+                  Bonjour {user.prenom || 'à vous'} — plus qu'une étape.
+                </p>
+              </>
+            )}
 
             <button
               type="button"
@@ -462,6 +599,965 @@ function CartDrawer() {
         )}
       </aside>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Connexion / inscription                                            */
+/* ------------------------------------------------------------------ */
+
+/* Mêmes règles que server/api.ts — validées ici pour une réponse immédiate,
+   mais c'est le serveur qui fait foi (ces contrôles sont du confort, pas de
+   la sécurité). */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MDP_MIN = 8;
+
+function Champ({ id, label, hint, erreur, className = '', ...props }) {
+  return (
+    <div className={className}>
+      <label className="sara-label" htmlFor={id}>{label}</label>
+      <input id={id} className="sara-input" aria-invalid={erreur ? 'true' : undefined} {...props} />
+      {hint && <p className="sara-hint">{hint}</p>}
+    </div>
+  );
+}
+
+function AuthPage({ mode }) {
+  const inscription = mode === 'register';
+  const { user, isLoading, login, register, logout } = useAuth();
+  const { count, openCart } = useCart();
+
+  const [form, setForm] = useState({ prenom: '', nom: '', email: '', phone: '', password: '', newsletter: false });
+  const [erreur, setErreur] = useState('');
+  const [champFautif, setChampFautif] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  // Repartir d'un formulaire propre quand on bascule connexion <-> inscription
+  useEffect(() => { setErreur(''); setChampFautif(''); }, [mode]);
+
+  const soumettre = async (e) => {
+    e.preventDefault();
+    setErreur(''); setChampFautif('');
+
+    if (inscription && !form.prenom.trim()) { setErreur('Votre prénom est nécessaire.'); setChampFautif('prenom'); return; }
+    if (inscription && !form.nom.trim()) { setErreur('Votre nom est nécessaire.'); setChampFautif('nom'); return; }
+    if (!EMAIL_RE.test(form.email.trim())) { setErreur('Cette adresse e-mail ne semble pas valide.'); setChampFautif('email'); return; }
+    if (inscription && form.password.length < MDP_MIN) {
+      setErreur(`Le mot de passe doit faire au moins ${MDP_MIN} caractères.`); setChampFautif('password'); return;
+    }
+    if (!form.password) { setErreur('Le mot de passe est nécessaire.'); setChampFautif('password'); return; }
+
+    setEnvoi(true);
+    try {
+      if (inscription) {
+        await register({
+          email: form.email.trim(),
+          password: form.password,
+          prenom: form.prenom.trim(),
+          nom: form.nom.trim(),
+          phone: form.phone.trim() || undefined,
+          newsletter: form.newsletter,
+        });
+      } else {
+        await login(form.email.trim(), form.password);
+      }
+      // Retour au panier si une commande était en cours, sinon à l'accueil.
+      if (count > 0) { window.location.hash = MENU_ROUTE; openCart(); }
+      else { window.location.hash = '#accueil'; }
+    } catch (e2) {
+      // Les fonctions du contexte rejettent avec le message français du
+      // serveur (« Cet email est déjà utilisé », « Email ou mot de passe
+      // incorrect »…) : ceux-là sont utiles au client, on les affiche tels
+      // quels. Les messages techniques (500, panne réseau) ne lui apprennent
+      // rien et l'inquiètent : on les remplace par une phrase actionnable.
+      const brut = e2?.message ?? '';
+      const technique = !brut || /erreur (serveur|inconnue)|requ[êe]te [ée]chou/i.test(brut);
+      setErreur(technique
+        ? "Le service est momentanément indisponible. Réessayez dans un instant, ou appelez-nous pour commander."
+        : brut);
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <main className="bg-sara-paper min-h-[60vh] flex items-center justify-center px-5">
+        <p className="text-sara-muted">Chargement…</p>
+      </main>
+    );
+  }
+
+  if (user) {
+    return (
+      <main className="bg-sara-paper px-5 py-16 md:py-24">
+        <div className="card-light rounded-3xl max-w-md mx-auto p-6 sm:p-8 text-center">
+          <span className="w-14 h-14 rounded-full bg-sara-green text-sara-cream font-display text-2xl flex items-center justify-center mx-auto" aria-hidden="true">
+            {(user.prenom || user.email || '?').charAt(0).toUpperCase()}
+          </span>
+          <h1 className="heading text-sara-green text-3xl mt-4">Vous êtes connecté</h1>
+          <p className="mt-2 text-sara-muted">
+            {user.prenom ? `${user.prenom} ${user.nom ?? ''}`.trim() : user.email}
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <PillLink href={ACCOUNT_ROUTE} variant="red" className="justify-center">Mon espace client</PillLink>
+            <PillLink href={MENU_ROUTE} variant="dark" className="justify-center"><Flame className="w-5 h-5" /> Voir la carte</PillLink>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="bg-sara-paper px-5 py-12 md:py-20">
+      <div className="max-w-md mx-auto">
+        <div className="text-center">
+          <Eyebrow className="text-sara-goldDeep">{inscription ? 'Bienvenue chez Sara' : 'Content de vous revoir'}</Eyebrow>
+          <h1 className="heading text-sara-green text-3xl sm:text-4xl mt-3">
+            {inscription ? 'Créez votre compte' : 'Connectez-vous'}
+          </h1>
+          <p className="mt-3 text-sara-muted text-sm">
+            {inscription
+              ? 'Un compte permet de suivre vos commandes en direct et de retrouver vos plats favoris.'
+              : 'Retrouvez vos commandes en cours et vos plats favoris.'}
+          </p>
+        </div>
+
+        <form onSubmit={soumettre} className="card-light rounded-3xl mt-8 p-5 sm:p-7 space-y-4" noValidate>
+          {erreur && (
+            <p className="sara-error" role="alert">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+              <span>{erreur}</span>
+            </p>
+          )}
+
+          {inscription && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Champ id="prenom" label="Prénom" type="text" autoComplete="given-name" required
+                value={form.prenom} onChange={set('prenom')} erreur={champFautif === 'prenom'} placeholder="Sara" />
+              <Champ id="nom" label="Nom" type="text" autoComplete="family-name" required
+                value={form.nom} onChange={set('nom')} erreur={champFautif === 'nom'} placeholder="Yilmaz" />
+            </div>
+          )}
+
+          <Champ id="email" label="Adresse e-mail" type="email" autoComplete="email" required inputMode="email"
+            value={form.email} onChange={set('email')} erreur={champFautif === 'email'} placeholder="vous@exemple.ch" />
+
+          {inscription && (
+            <Champ id="phone" label="Téléphone (facultatif)" type="tel" autoComplete="tel" inputMode="tel"
+              value={form.phone} onChange={set('phone')} placeholder="079 000 00 00"
+              hint="Utile si le restaurant doit vous joindre pour une livraison." />
+          )}
+
+          <Champ id="password" label="Mot de passe" type="password" required
+            autoComplete={inscription ? 'new-password' : 'current-password'}
+            value={form.password} onChange={set('password')} erreur={champFautif === 'password'}
+            hint={inscription ? `${MDP_MIN} caractères minimum.` : undefined} />
+
+          {inscription && (
+            <label className="flex items-start gap-2.5 text-sm text-sara-muted cursor-pointer">
+              <input type="checkbox" checked={form.newsletter} onChange={set('newsletter')}
+                className="mt-0.5 w-4 h-4 accent-[#C60101]" />
+              <span>Je souhaite recevoir les offres et nouveautés de Sara.</span>
+            </label>
+          )}
+
+          <button
+            type="submit"
+            disabled={envoi}
+            className="w-full inline-flex items-center justify-center gap-2 px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {envoi ? 'Un instant…' : (inscription ? 'Créer mon compte' : 'Se connecter')}
+            {!envoi && <ArrowUpRight className="w-5 h-5" />}
+          </button>
+        </form>
+
+        <p className="mt-5 text-center text-sm text-sara-muted">
+          {inscription ? 'Vous avez déjà un compte ? ' : 'Pas encore de compte ? '}
+          <a href={inscription ? LOGIN_ROUTE : REGISTER_ROUTE} className="inline-block py-1.5 font-semibold text-sara-red hover:underline">
+            {inscription ? 'Se connecter' : 'Créez-en un'}
+          </a>
+        </p>
+      </div>
+    </main>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tunnel de commande                                                 */
+/* ------------------------------------------------------------------ */
+
+/* Coquille commune aux écrans « page » (commande, suivi) : titre, retour,
+   fond papier, largeur de lecture. */
+function PageEtroite({ retourHref, retourLabel, eyebrow, titre, children }) {
+  return (
+    <main className="bg-sara-paper px-5 py-10 md:py-16">
+      <div className="max-w-2xl mx-auto">
+        {retourHref && (
+          <a href={retourHref} className="inline-flex items-center gap-1.5 py-1.5 text-sm font-semibold text-sara-muted hover:text-sara-red transition">
+            <ArrowLeft className="w-4 h-4" /> {retourLabel}
+          </a>
+        )}
+        <div className="mt-4 text-center">
+          {eyebrow && <Eyebrow className="text-sara-goldDeep">{eyebrow}</Eyebrow>}
+          <h1 className="heading text-sara-green text-3xl sm:text-4xl mt-3">{titre}</h1>
+        </div>
+        {children}
+      </div>
+    </main>
+  );
+}
+
+/* Le serveur n'accepte QUE ces deux valeurs (server/api.ts) — toute autre
+   chaîne fait échouer la commande en 400. */
+const TYPES_COMMANDE = [
+  { id: 'emporter', label: 'À emporter', desc: 'Vous venez chercher', Icone: Store },
+  { id: 'livraison', label: 'Livraison', desc: 'On vous apporte', Icone: Bike },
+];
+
+function CheckoutPage() {
+  const { user, isLoading } = useAuth();
+  const { items, total, count, placeOrder, createStripeCheckout } = useCart();
+
+  const [type, setType] = useState('emporter');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [erreur, setErreur] = useState('');
+  const [champFautif, setChampFautif] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const [paiement, setPaiement] = useState('especes');
+  const [clientSecret, setClientSecret] = useState(null);
+
+  // Pré-remplissage depuis le profil : personne n'aime retaper son adresse.
+  useEffect(() => {
+    if (!user) return;
+    setPhone((p) => p || user.phone || '');
+    setAddress((a) => a || user.address || '');
+  }, [user]);
+
+  if (isLoading) {
+    return <main className="bg-sara-paper min-h-[60vh] flex items-center justify-center"><p className="text-sara-muted">Chargement…</p></main>;
+  }
+
+  // Le panier renvoie vers la création de compte tant qu'on n'est pas connecté :
+  // cet écran applique la même règle, au cas où on y arrive par l'URL.
+  if (!user) {
+    return (
+      <PageEtroite retourHref={MENU_ROUTE} retourLabel="Retour à la carte" titre="Un compte est nécessaire">
+        <div className="card-light rounded-3xl mt-8 p-6 text-center">
+          <p className="text-sara-muted">Créez votre compte pour commander et suivre votre commande en direct.</p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <PillLink href={REGISTER_ROUTE} variant="red" className="justify-center"><UserPlus className="w-5 h-5" /> Créez un compte</PillLink>
+            <PillLink href={LOGIN_ROUTE} variant="dark" className="justify-center">Se connecter</PillLink>
+          </div>
+        </div>
+      </PageEtroite>
+    );
+  }
+
+  if (count === 0) {
+    return (
+      <PageEtroite retourHref={MENU_ROUTE} retourLabel="Retour à la carte" titre="Votre panier est vide">
+        <div className="card-light rounded-3xl mt-8 p-6 text-center">
+          <p className="text-sara-muted">Ajoutez un plat depuis la carte pour passer commande.</p>
+          <div className="mt-6 flex justify-center">
+            <PillLink href={MENU_ROUTE} variant="red"><Flame className="w-5 h-5" /> Voir la carte</PillLink>
+          </div>
+        </div>
+      </PageEtroite>
+    );
+  }
+
+  const valider = async (e) => {
+    e.preventDefault();
+    setErreur(''); setChampFautif('');
+    if (!phone.trim()) {
+      setErreur('Un numéro de téléphone est nécessaire : le restaurant doit pouvoir vous joindre.');
+      setChampFautif('phone'); return;
+    }
+    if (type === 'livraison' && address.trim().length < 8) {
+      setErreur('Indiquez une adresse complète pour la livraison.');
+      setChampFautif('address'); return;
+    }
+    setEnvoi(true);
+    const donnees = {
+      orderType: type,
+      address: type === 'livraison' ? address.trim() : '',
+      phone: phone.trim(),
+    };
+    try {
+      if (paiement === 'carte') {
+        // La commande n'est PAS créée ici : c'est le webhook Stripe qui la crée
+        // une fois le paiement confirmé. On n'affiche donc pas de suivi tant
+        // que le paiement n'a pas abouti, et le panier n'est pas vidé.
+        const { clientSecret: cs } = await createStripeCheckout(donnees);
+        setClientSecret(cs);
+        setEnvoi(false);
+        return;
+      }
+      const commande = await placeOrder(donnees);
+      // placeOrder vide le panier au succès. On enchaîne sur le suivi.
+      window.location.hash = `${TRACK_ROUTE}/${commande.id}`;
+    } catch (e2) {
+      const brut = e2?.message ?? '';
+      const technique = !brut || /erreur (serveur|inconnue)|requ[êe]te [ée]chou/i.test(brut);
+      setErreur(technique
+        ? "Le service est momentanément indisponible. Réessayez, ou appelez-nous pour commander."
+        : brut);
+      setEnvoi(false);
+    }
+  };
+
+  /* Paiement carte : Stripe prend la main. On sort du formulaire pour laisser
+     le champ libre à son iframe, avec un retour arrière possible. */
+  if (clientSecret) {
+    return (
+      <PageEtroite retourHref={MENU_ROUTE} retourLabel="Retour à la carte" eyebrow="Paiement sécurisé" titre="Régler par carte">
+        <button
+          type="button"
+          onClick={() => setClientSecret(null)}
+          className="mt-4 inline-flex items-center gap-1.5 py-1.5 text-sm font-semibold text-sara-muted hover:text-sara-red transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Modifier ma commande
+        </button>
+        <div className="card-light rounded-3xl mt-4 p-3 sm:p-4 overflow-hidden">
+          <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+            <EmbeddedCheckout />
+          </EmbeddedCheckoutProvider>
+        </div>
+        <p className="mt-3 text-center text-xs text-sara-muted">
+          Votre carte est seulement <strong>autorisée</strong> : elle n'est débitée
+          qu'au moment où le restaurant accepte la commande.
+        </p>
+      </PageEtroite>
+    );
+  }
+
+  return (
+    <PageEtroite retourHref={MENU_ROUTE} retourLabel="Retour à la carte" eyebrow="Dernière étape" titre="Votre commande">
+      <form onSubmit={valider} className="mt-8 space-y-5" noValidate>
+        {erreur && (
+          <p className="sara-error" role="alert">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /><span>{erreur}</span>
+          </p>
+        )}
+
+        {/* Emporter ou livraison */}
+        <fieldset className="card-light rounded-3xl p-5 sm:p-6">
+          {/* Libellé court : « Comment souhaitez-vous être servi ? » laissait le
+              point d'interrogation seul sur une 2e ligne en 375 px. */}
+          <legend className="sara-label px-1">Mode de retrait</legend>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            {TYPES_COMMANDE.map(({ id, label, desc, Icone }) => {
+              const actif = type === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setType(id)}
+                  aria-pressed={actif}
+                  className={`rounded-2xl p-4 text-left border-2 transition ${actif ? 'border-sara-red bg-sara-red/5' : 'border-sara-green/15 hover:border-sara-green/35'}`}
+                >
+                  <Icone className={`w-6 h-6 ${actif ? 'text-sara-red' : 'text-sara-green'}`} aria-hidden="true" />
+                  <span className={`block font-display text-lg mt-2 ${actif ? 'text-sara-red' : 'text-sara-green'}`}>{label}</span>
+                  <span className="block text-xs text-sara-muted mt-0.5">{desc}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {/* Coordonnées */}
+        <div className="card-light rounded-3xl p-5 sm:p-6 space-y-4">
+          <Champ
+            id="phone" label="Téléphone" type="tel" inputMode="tel" autoComplete="tel" required
+            value={phone} onChange={(e) => setPhone(e.target.value)} erreur={champFautif === 'phone'}
+            placeholder="079 000 00 00"
+            hint="Le restaurant vous appelle si besoin."
+          />
+          {type === 'livraison' && (
+            <Champ
+              id="address" label="Adresse de livraison" type="text" autoComplete="street-address" required
+              value={address} onChange={(e) => setAddress(e.target.value)} erreur={champFautif === 'address'}
+              placeholder="Rue, numéro, code postal, ville"
+            />
+          )}
+        </div>
+
+        {/* Récapitulatif */}
+        <div className="card-light rounded-3xl p-5 sm:p-6">
+          <h2 className="sara-label">Récapitulatif</h2>
+          <ul className="mt-2 divide-y divide-sara-green/10">
+            {items.map((l, i) => (
+              <li key={`${l.name}|${l.price}|${l.desc ?? ''}|${i}`} className="py-2.5 flex items-baseline justify-between gap-3">
+                <span className="text-sara-green">
+                  <span className="font-bold tabular-nums">{l.quantity}×</span> {l.name}
+                  {l.desc ? <span className="block text-xs text-sara-muted">{l.desc}</span> : null}
+                </span>
+                <span className="font-display text-lg text-sara-green tabular-nums shrink-0">{formatChf(l.price * l.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 pt-3 border-t border-sara-green/15 flex items-center justify-between">
+            <span className="text-sara-muted font-medium">Total</span>
+            <span className="font-display text-3xl text-sara-green tabular-nums">{formatChf(total)}</span>
+          </div>
+        </div>
+
+        {/* Mode de paiement — la carte n'apparaît que si la clé publiable est
+            configurée, sinon le bouton mènerait à une erreur incompréhensible. */}
+        <fieldset className="card-light rounded-3xl p-5 sm:p-6">
+          <legend className="sara-label px-1">Paiement</legend>
+          <div className={`grid gap-3 mt-2 ${stripePromise ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {[
+              { id: 'especes', label: 'Sur place', desc: type === 'livraison' ? 'À la livraison' : 'Au retrait' },
+              ...(stripePromise ? [{ id: 'carte', label: 'Carte bancaire', desc: 'Débitée à l’acceptation' }] : []),
+            ].map(({ id, label, desc }) => {
+              const actif = paiement === id;
+              return (
+                <button
+                  key={id} type="button" onClick={() => setPaiement(id)} aria-pressed={actif}
+                  className={`rounded-2xl p-4 text-left border-2 transition ${actif ? 'border-sara-red bg-sara-red/5' : 'border-sara-green/15 hover:border-sara-green/35'}`}
+                >
+                  <span className={`block font-display text-lg ${actif ? 'text-sara-red' : 'text-sara-green'}`}>{label}</span>
+                  <span className="block text-xs text-sara-muted mt-0.5">{desc}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <button
+          type="submit"
+          disabled={envoi}
+          className="w-full inline-flex items-center justify-center gap-2 px-7 py-4 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {envoi ? 'Un instant…' : paiement === 'carte'
+            ? <>Payer {formatChf(total)} par carte</>
+            : <><Flame className="w-5 h-5" /> Confirmer ma commande</>}
+        </button>
+        <p className="text-center text-xs text-sara-muted">
+          {paiement === 'carte'
+            ? "Votre carte est autorisée maintenant, débitée seulement si le restaurant accepte."
+            : 'Vous réglez directement au restaurant ou au livreur.'}
+        </p>
+      </form>
+    </PageEtroite>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Suivi de commande                                                  */
+/* ------------------------------------------------------------------ */
+
+/* Les 6 statuts du serveur ne se résument pas à 4 étapes : « annulé » sort du
+   parcours, et sa cause change complètement le message affiché. */
+const ETAPES_SUIVI = ['pending', 'preparing', 'ready', 'delivered'];
+
+function OrderTrackingPage({ orderId }) {
+  const { user } = useAuth();
+  const { status, orderType, etaMinutes, etaReadyAt, cancelledByClient, markReceived, cancelOrder } = useOrderStatus(orderId);
+  const [erreur, setErreur] = useState('');
+  const [action, setAction] = useState(false);
+
+  const livraison = orderType === 'livraison';
+  const annule = status === 'cancelled';
+
+  // pending et confirmed sont deux états serveur mais une seule étape client :
+  // « le restaurant n'a pas encore répondu ».
+  const indexEtape = status === 'delivered' ? 3
+    : status === 'ready' ? 2
+    : status === 'preparing' ? 1
+    : 0;
+
+  const libelles = [
+    { cle: 'pending', titre: 'Commande reçue', desc: "En attente de confirmation du restaurant" },
+    { cle: 'preparing', titre: 'En préparation', desc: 'Votre commande est en cuisine' },
+    { cle: 'ready', titre: livraison ? 'En route' : 'Prête', desc: livraison ? 'Le livreur est parti' : 'À récupérer au restaurant' },
+    { cle: 'delivered', titre: livraison ? 'Livrée' : 'Récupérée', desc: 'Bon appétit !' },
+  ];
+
+  const agir = async (fn) => {
+    setErreur(''); setAction(true);
+    try { await fn(); } catch (e) { setErreur(e?.message || 'Action impossible.'); }
+    finally { setAction(false); }
+  };
+
+  const heurePrete = etaReadyAt
+    ? new Date(etaReadyAt).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  return (
+    <PageEtroite
+      retourHref={MENU_ROUTE}
+      retourLabel="Retour à la carte"
+      eyebrow={`Commande ${String(orderId).slice(0, 8).toUpperCase()}`}
+      titre={annule ? 'Commande annulée' : 'Suivi de votre commande'}
+    >
+      {status === null && (
+        <p className="mt-8 text-center text-sara-muted">Chargement du statut…</p>
+      )}
+
+      {annule && (
+        <div className="card-light rounded-3xl mt-8 p-6 text-center">
+          <XCircle className="w-10 h-10 text-sara-red mx-auto" aria-hidden="true" />
+          <p className="heading text-sara-green text-xl mt-3">
+            {cancelledByClient ? 'Vous avez annulé cette commande' : 'Le restaurant n’a pas pu accepter cette commande'}
+          </p>
+          <p className="mt-2 text-sara-muted text-sm">
+            {cancelledByClient
+              ? 'Rien ne vous a été facturé.'
+              : 'Cela arrive en cas de rupture ou de forte affluence. Appelez-nous, on trouvera une solution.'}
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <PillLink href={MENU_ROUTE} variant="red" className="justify-center"><Flame className="w-5 h-5" /> Commander à nouveau</PillLink>
+            <a href={`tel:${INFO.phone.replace(/\s/g, '')}`} className="px-7 py-3.5 font-semibold rounded-2xl rounded-tr-none border border-sara-green/20 text-sara-green hover:border-sara-red hover:text-sara-red transition text-center">
+              Appeler le restaurant
+            </a>
+          </div>
+        </div>
+      )}
+
+      {status !== null && !annule && (
+        <>
+          <ol className="card-light rounded-3xl mt-8 p-5 sm:p-6 space-y-1">
+            {libelles.map((e, i) => {
+              const faite = i < indexEtape;
+              const courante = i === indexEtape;
+              return (
+                <li key={e.cle} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition ${
+                        faite ? 'bg-sara-green text-sara-cream'
+                          : courante ? 'bg-sara-red text-white'
+                          : 'bg-sara-paperAlt text-sara-green/40'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {faite ? <Check className="w-4 h-4" />
+                        : courante ? (i === 1 ? <ChefHat className="w-4 h-4" /> : i === 2 ? (livraison ? <Bike className="w-4 h-4" /> : <Store className="w-4 h-4" />) : <Clock className="w-4 h-4" />)
+                        : <span className="text-xs font-bold">{i + 1}</span>}
+                    </span>
+                    {i < libelles.length - 1 && (
+                      <span className={`w-0.5 flex-1 min-h-[1.75rem] ${faite ? 'bg-sara-green' : 'bg-sara-green/15'}`} aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="pb-5">
+                    <p className={`font-display text-lg ${courante ? 'text-sara-red' : faite ? 'text-sara-green' : 'text-sara-green/40'}`}>
+                      {e.titre}
+                    </p>
+                    {(courante || faite) && <p className="text-sm text-sara-muted">{e.desc}</p>}
+                    {courante && i === 1 && etaMinutes ? (
+                      <p className="mt-1 text-sm font-semibold text-sara-goldDeep">
+                        Prête dans ~{etaMinutes} min{heurePrete ? ` (vers ${heurePrete})` : ''}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+
+          {erreur && (
+            <p className="sara-error mt-4" role="alert">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /><span>{erreur}</span>
+            </p>
+          )}
+
+          {/* Annulation possible tant que le restaurant n'a pas commencé.
+              Réservée aux comptes : une commande invité ne peut pas s'annuler
+              seule (le serveur revalide de toute façon). */}
+          {user && (status === 'pending' || status === 'confirmed') && (
+            <button
+              type="button"
+              disabled={action}
+              onClick={() => agir(cancelOrder)}
+              className="mt-4 w-full py-3 rounded-2xl border border-sara-green/20 text-sm font-semibold text-sara-muted hover:border-sara-red hover:text-sara-red transition disabled:opacity-60"
+            >
+              Annuler ma commande
+            </button>
+          )}
+
+          {status === 'ready' && (
+            <button
+              type="button"
+              disabled={action}
+              onClick={() => agir(markReceived)}
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 px-7 py-4 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition disabled:opacity-60"
+            >
+              <Check className="w-5 h-5" /> J’ai reçu ma commande
+            </button>
+          )}
+
+          {status === 'delivered' && (
+            <div className="mt-4 flex justify-center">
+              <PillLink href={MENU_ROUTE} variant="red"><Flame className="w-5 h-5" /> Commander à nouveau</PillLink>
+            </div>
+          )}
+
+          <p className="mt-4 text-center text-xs text-sara-muted">
+            Cette page se met à jour toute seule. Gardez le lien pour revenir suivre votre commande.
+          </p>
+        </>
+      )}
+    </PageEtroite>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Réservation (table / espace chicha)                                */
+/*                                                                     */
+/*  ⚠️ Il n'existe AUCUNE route serveur de réservation (vérifié : les    */
+/*  seules routes exposées sont auth, me, orders, stripe, track, admin) */
+/*  ni table `reservations` en base. Cet écran ne prétend donc pas      */
+/*  enregistrer quoi que ce soit : il compose la demande et l'envoie    */
+/*  par le seul canal qui existe aujourd'hui — le téléphone du          */
+/*  restaurant, par appel ou par SMS pré-rempli. Le jour où Ayoub       */
+/*  ajoute POST /api/reservations, seule la fonction `envoyer` change.  */
+/* ------------------------------------------------------------------ */
+
+const telBrut = INFO.phone.replace(/[^\d+]/g, '');
+
+function ReservationPage({ chicha }) {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ date: '', heure: '', personnes: '2', nom: '', phone: '' });
+  const [erreur, setErreur] = useState('');
+  const [copie, setCopie] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setForm((f) => ({
+      ...f,
+      nom: f.nom || `${user.prenom ?? ''} ${user.nom ?? ''}`.trim(),
+      phone: f.phone || user.phone || '',
+    }));
+  }, [user]);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const complet = form.date && form.heure && form.personnes && form.nom.trim();
+  const dateLisible = form.date
+    ? new Date(`${form.date}T00:00:00`).toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })
+    : '';
+  const message =
+    `Bonjour, je souhaite réserver ${chicha ? "l'espace chicha" : 'une table'} pour ${form.personnes} personne`
+    + `${Number(form.personnes) > 1 ? 's' : ''} le ${dateLisible} à ${form.heure}.`
+    + ` Nom : ${form.nom.trim()}.${form.phone.trim() ? ` Téléphone : ${form.phone.trim()}.` : ''}`;
+
+  const verifier = () => {
+    if (!complet) { setErreur('Complétez la date, l’heure, le nombre de personnes et votre nom.'); return false; }
+    setErreur(''); return true;
+  };
+
+  const copier = async () => {
+    if (!verifier()) return;
+    try { await navigator.clipboard.writeText(message); setCopie(true); setTimeout(() => setCopie(false), 2500); }
+    catch { setErreur('Copie impossible — sélectionnez le texte à la main.'); }
+  };
+
+  return (
+    <PageEtroite
+      retourHref={chicha ? '#chicha' : '#accueil'}
+      retourLabel="Retour"
+      eyebrow={chicha ? 'Espace chicha' : 'Restaurant'}
+      titre={chicha ? 'Réserver votre chicha' : 'Réserver une table'}
+    >
+      <p className="mt-3 text-center text-sara-muted text-sm">
+        Composez votre demande, puis envoyez-la en un geste. Le restaurant vous
+        confirme directement.
+      </p>
+
+      <div className="card-light rounded-3xl mt-8 p-5 sm:p-6 space-y-4">
+        {erreur && (
+          <p className="sara-error" role="alert">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /><span>{erreur}</span>
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Champ id="r-date" label="Date" type="date" required
+            value={form.date} onChange={set('date')} min={new Date().toISOString().slice(0, 10)} />
+          <Champ id="r-heure" label="Heure" type="time" required value={form.heure} onChange={set('heure')} />
+        </div>
+
+        <div>
+          <label className="sara-label" htmlFor="r-personnes">Nombre de personnes</label>
+          <select id="r-personnes" className="sara-input" value={form.personnes} onChange={set('personnes')}>
+            {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>{n} personne{n > 1 ? 's' : ''}</option>
+            ))}
+            <option value="plus de 20">Plus de 20 (groupe)</option>
+          </select>
+        </div>
+
+        <Champ id="r-nom" label="Votre nom" type="text" autoComplete="name" required
+          value={form.nom} onChange={set('nom')} placeholder="Nom et prénom" />
+        <Champ id="r-tel" label="Votre téléphone (facultatif)" type="tel" inputMode="tel" autoComplete="tel"
+          value={form.phone} onChange={set('phone')} placeholder="079 000 00 00" />
+
+        {complet && (
+          <div className="rounded-2xl bg-sara-paperAlt p-4">
+            <p className="sara-label">Votre demande</p>
+            <p className="text-sm text-sara-green leading-relaxed">{message}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <a
+            href={`tel:${telBrut}`}
+            onClick={(e) => { if (!verifier()) e.preventDefault(); }}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-red text-white hover:bg-sara-redDeep transition"
+          >
+            <Phone className="w-5 h-5" /> Appeler le restaurant
+          </a>
+          <a
+            href={`sms:${telBrut}?&body=${encodeURIComponent(message)}`}
+            onClick={(e) => { if (!verifier()) e.preventDefault(); }}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 font-semibold rounded-2xl rounded-tr-none bg-sara-green text-sara-cream hover:bg-sara-greenDeep transition"
+          >
+            Envoyer par SMS
+          </a>
+        </div>
+
+        <button
+          type="button"
+          onClick={copier}
+          className="w-full py-2.5 text-xs font-semibold uppercase tracking-widest text-sara-muted hover:text-sara-red transition"
+        >
+          {copie ? 'Demande copiée ✓' : 'Copier la demande'}
+        </button>
+
+        <p className="text-center text-xs text-sara-muted">
+          Réservation confirmée par le restaurant. Horaires : {INFO.hoursWeek} · {INFO.hoursWeekend}
+        </p>
+      </div>
+    </PageEtroite>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Espace compte                                                      */
+/* ------------------------------------------------------------------ */
+
+function Encadre({ titre, children, action }) {
+  return (
+    <section className="card-light rounded-3xl p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="heading text-sara-green text-xl">{titre}</h2>
+        {action}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function AccountPage() {
+  const { user, isLoading, logout, updateProfile, changePassword, toggleFavorite } = useAuth();
+  const { orders, isLoading: chargeCommandes } = useOrders();
+
+  const [profil, setProfil] = useState({ prenom: '', nom: '', phone: '', address: '', newsletter: false });
+  const [msgProfil, setMsgProfil] = useState({ type: '', texte: '' });
+  const [envoiProfil, setEnvoiProfil] = useState(false);
+
+  const [mdp, setMdp] = useState({ actuel: '', nouveau: '' });
+  const [msgMdp, setMsgMdp] = useState({ type: '', texte: '' });
+  const [envoiMdp, setEnvoiMdp] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setProfil({
+      prenom: user.prenom ?? '', nom: user.nom ?? '', phone: user.phone ?? '',
+      address: user.address ?? '', newsletter: !!user.newsletter,
+    });
+  }, [user]);
+
+  if (isLoading) {
+    return <main className="bg-sara-paper min-h-[60vh] flex items-center justify-center"><p className="text-sara-muted">Chargement…</p></main>;
+  }
+
+  if (!user) {
+    return (
+      <PageEtroite retourHref="#accueil" retourLabel="Retour à l'accueil" titre="Votre espace client">
+        <div className="card-light rounded-3xl mt-8 p-6 text-center">
+          <p className="text-sara-muted">Connectez-vous pour retrouver vos commandes et vos favoris.</p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <PillLink href={LOGIN_ROUTE} variant="red" className="justify-center">Se connecter</PillLink>
+            <PillLink href={REGISTER_ROUTE} variant="dark" className="justify-center"><UserPlus className="w-5 h-5" /> Créez un compte</PillLink>
+          </div>
+        </div>
+      </PageEtroite>
+    );
+  }
+
+  const enregistrerProfil = async (e) => {
+    e.preventDefault();
+    setMsgProfil({ type: '', texte: '' }); setEnvoiProfil(true);
+    try {
+      await updateProfile({
+        prenom: profil.prenom.trim(), nom: profil.nom.trim(),
+        phone: profil.phone.trim(), address: profil.address.trim(),
+        newsletter: profil.newsletter,
+      });
+      setMsgProfil({ type: 'ok', texte: 'Profil enregistré.' });
+    } catch (e2) {
+      setMsgProfil({ type: 'ko', texte: e2?.message || 'Enregistrement impossible.' });
+    } finally { setEnvoiProfil(false); }
+  };
+
+  const changerMdp = async (e) => {
+    e.preventDefault();
+    setMsgMdp({ type: '', texte: '' });
+    if (mdp.nouveau.length < MDP_MIN) {
+      setMsgMdp({ type: 'ko', texte: `Le nouveau mot de passe doit faire au moins ${MDP_MIN} caractères.` });
+      return;
+    }
+    setEnvoiMdp(true);
+    try {
+      await changePassword(mdp.actuel, mdp.nouveau);
+      setMdp({ actuel: '', nouveau: '' });
+      setMsgMdp({ type: 'ok', texte: 'Mot de passe modifié. Vos autres appareils ont été déconnectés.' });
+    } catch (e2) {
+      setMsgMdp({ type: 'ko', texte: e2?.message || 'Modification impossible.' });
+    } finally { setEnvoiMdp(false); }
+  };
+
+  const favoris = MENU_ITEMS.filter((p) => (user.favorites ?? []).includes(p.id));
+  const Message = ({ m }) => m.texte
+    ? <p className={m.type === 'ok' ? 'text-sm font-semibold text-sara-green' : 'sara-error'} role="status">{m.texte}</p>
+    : null;
+
+  return (
+    <main className="bg-sara-paper px-5 py-10 md:py-16">
+      <div className="max-w-2xl mx-auto space-y-5">
+        {/* En-tête du compte */}
+        <div className="text-center">
+          <span className="w-16 h-16 rounded-full bg-sara-green text-sara-cream font-display text-3xl flex items-center justify-center mx-auto" aria-hidden="true">
+            {(user.prenom || user.email).charAt(0).toUpperCase()}
+          </span>
+          <h1 className="heading text-sara-green text-3xl sm:text-4xl mt-4">
+            Bonjour {user.prenom || ''}
+          </h1>
+          <p className="mt-1 text-sara-muted text-sm">{user.email}</p>
+        </div>
+
+        {/* Commandes */}
+        <Encadre titre="Mes commandes">
+          {chargeCommandes ? (
+            <p className="text-sara-muted text-sm">Chargement…</p>
+          ) : orders.length === 0 ? (
+            <p className="text-sara-muted text-sm">Aucune commande pour le moment.</p>
+          ) : (
+            <ul className="divide-y divide-sara-green/10">
+              {orders.map((o) => (
+                <li key={o.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sara-green">
+                      {new Date(o.createdAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      <span className="text-sara-muted font-normal"> · {o.orderType === 'livraison' ? 'Livraison' : 'À emporter'}</span>
+                    </p>
+                    <p className="text-xs text-sara-muted truncate">
+                      {o.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}
+                    </p>
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide ${
+                      o.status === 'cancelled' ? 'bg-sara-red/10 text-sara-red' : 'bg-sara-gold/15 text-sara-goldDeep'
+                    }`}>
+                      {LIBELLE_STATUT[o.status] ?? o.status}
+                    </span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-display text-lg text-sara-green tabular-nums block">{formatChf(o.total)}</span>
+                    <a href={`${TRACK_ROUTE}/${o.id}`} className="inline-block py-1 text-xs font-semibold text-sara-red hover:underline">Suivre</a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Encadre>
+
+        {/* Favoris */}
+        <Encadre titre="Mes favoris">
+          {favoris.length === 0 ? (
+            <p className="text-sara-muted text-sm">
+              Aucun favori. Touchez le cœur sur un plat de <a href={MENU_ROUTE} className="font-semibold text-sara-red hover:underline">la carte</a> pour le retrouver ici.
+            </p>
+          ) : (
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {favoris.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 rounded-2xl border border-sara-green/10 p-2.5">
+                  <span className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-sara-paperAlt">
+                    <Img src={p.image} emoji={p.emoji} alt={p.name} className="w-full h-full object-cover" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-sara-green text-sm truncate">{p.name}</span>
+                    <span className="block text-xs text-sara-muted">{formatChf(p.price)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleFavorite(p.id)}
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-sara-red hover:bg-sara-red/10 transition shrink-0"
+                    aria-label={`Retirer ${p.name} des favoris`}
+                  >
+                    <Heart className="w-4 h-4 fill-current" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Encadre>
+
+        {/* Profil */}
+        <Encadre titre="Mes informations">
+          <form onSubmit={enregistrerProfil} className="space-y-4" noValidate>
+            <Message m={msgProfil} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Champ id="c-prenom" label="Prénom" type="text" autoComplete="given-name" required
+                value={profil.prenom} onChange={(e) => setProfil((p) => ({ ...p, prenom: e.target.value }))} />
+              <Champ id="c-nom" label="Nom" type="text" autoComplete="family-name" required
+                value={profil.nom} onChange={(e) => setProfil((p) => ({ ...p, nom: e.target.value }))} />
+            </div>
+            <Champ id="c-phone" label="Téléphone" type="tel" inputMode="tel" autoComplete="tel"
+              value={profil.phone} onChange={(e) => setProfil((p) => ({ ...p, phone: e.target.value }))} />
+            <Champ id="c-address" label="Adresse de livraison" type="text" autoComplete="street-address"
+              value={profil.address} onChange={(e) => setProfil((p) => ({ ...p, address: e.target.value }))}
+              hint="Pré-remplie automatiquement lors de vos prochaines commandes." />
+            <label className="flex items-start gap-2.5 text-sm text-sara-muted cursor-pointer">
+              <input type="checkbox" checked={profil.newsletter}
+                onChange={(e) => setProfil((p) => ({ ...p, newsletter: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 accent-[#C60101]" />
+              <span>Recevoir les offres et nouveautés de Sara.</span>
+            </label>
+            <button type="submit" disabled={envoiProfil}
+              className="w-full px-7 py-3 font-semibold rounded-2xl rounded-tr-none bg-sara-green text-sara-cream hover:bg-sara-greenDeep transition disabled:opacity-60">
+              {envoiProfil ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </form>
+        </Encadre>
+
+        {/* Mot de passe */}
+        <Encadre titre="Mot de passe">
+          <form onSubmit={changerMdp} className="space-y-4" noValidate>
+            <Message m={msgMdp} />
+            <Champ id="c-mdp-actuel" label="Mot de passe actuel" type="password" autoComplete="current-password" required
+              value={mdp.actuel} onChange={(e) => setMdp((m) => ({ ...m, actuel: e.target.value }))} />
+            <Champ id="c-mdp-nouveau" label="Nouveau mot de passe" type="password" autoComplete="new-password" required
+              value={mdp.nouveau} onChange={(e) => setMdp((m) => ({ ...m, nouveau: e.target.value }))}
+              hint={`${MDP_MIN} caractères minimum. Vos autres appareils seront déconnectés.`} />
+            <button type="submit" disabled={envoiMdp}
+              className="w-full px-7 py-3 font-semibold rounded-2xl rounded-tr-none border border-sara-green/20 text-sara-green hover:border-sara-red hover:text-sara-red transition disabled:opacity-60">
+              {envoiMdp ? 'Modification…' : 'Changer mon mot de passe'}
+            </button>
+          </form>
+        </Encadre>
+
+        <button type="button" onClick={logout}
+          className="w-full py-3 text-sm font-semibold uppercase tracking-widest text-sara-muted hover:text-sara-red transition">
+          Se déconnecter
+        </button>
+      </div>
+    </main>
   );
 }
 
@@ -540,7 +1636,7 @@ function Hero() {
         </div>
         <div className="mt-8 flex justify-center gap-2">
           {HERO_DISHES.map((_, i) => (
-            <button key={i} onClick={() => setIdx(i)} className={`h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-sara-red' : 'w-2 bg-sara-green/20'}`} aria-label={`Plat ${i + 1}`} />
+            <button key={i} onClick={() => setIdx(i)} className={`sara-dot h-2 rounded-full transition-all ${i === idx ? 'w-7 bg-sara-red' : 'w-2 bg-sara-green/20'}`} aria-label={`Plat ${i + 1}`} />
           ))}
         </div>
       </div>
@@ -667,7 +1763,7 @@ function Chicha() {
             <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-sara-ink/70 border border-sara-goldLight/50 text-sara-cream flex items-center justify-center hover:bg-sara-red hover:border-sara-red transition" aria-label="Photo suivante"><ChevronRight className="w-5 h-5" /></button>
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
               {CHICHA_PHOTOS.map((_, idx) => (
-                <button key={idx} onClick={() => setI(idx)} className={`h-2 rounded-full transition-all ${idx === i ? 'w-7 bg-sara-gold' : 'w-2 bg-sara-cream/40'}`} aria-label={`Photo ${idx + 1}`} />
+                <button key={idx} onClick={() => setI(idx)} className={`sara-dot h-2 rounded-full transition-all ${idx === i ? 'w-7 bg-sara-gold' : 'w-2 bg-sara-cream/40'}`} aria-label={`Photo ${idx + 1}`} />
               ))}
             </div>
           </div>
@@ -682,7 +1778,7 @@ function Chicha() {
             de parfums et service soigné — l'endroit idéal pour prolonger la soirée entre amis.
           </p>
           <div className="mt-8">
-            <PillLink href="#contact" variant="red"><Flame className="w-5 h-5" /> Réserver ma chicha</PillLink>
+            <PillLink href={RESA_CHICHA_ROUTE} variant="red"><Flame className="w-5 h-5" /> Réserver ma chicha</PillLink>
           </div>
         </Reveal>
       </div>
@@ -718,7 +1814,7 @@ function About() {
           <p className="text-sara-muted">{INFO.hoursWeekend}</p>
 
           <div className="mt-8 flex justify-center">
-            <PillLink href="#contact" variant="dark">Réserver une table</PillLink>
+            <PillLink href={RESA_ROUTE} variant="dark">Réserver une table</PillLink>
           </div>
         </Reveal>
       </div>
@@ -798,20 +1894,38 @@ function ProductCard({ p }) {
      accroche l'œil. Les autres restent blanches pour laisser la couleur aux
      photos des plats. */
   const f = p.id === FEATURED_ID;
-  const { addItem, openCart } = useCart();
+  const { addItem } = useCart();
+  const { user, toggleFavorite } = useAuth();
+  /* Le cœur n'apparaît que connecté : sans compte, `toggleFavorite` renverrait
+     un 401 et le client ne comprendrait pas pourquoi son clic ne fait rien. */
+  const favori = !!user && (user.favorites ?? []).includes(p.id);
 
   /* `desc` est OBLIGATOIRE, même vide : le panier ne fusionne deux lignes que
      si nom + prix + desc sont identiques. L'omettre ferait fusionner deux
      personnalisations différentes du même plat (bug déjà vécu chez Flash
      Pizzas). Le catalogue n'a pas encore d'options, donc '' pour l'instant. */
-  const ajouter = () => {
+  const ajouter = (e) => {
     addItem({ name: p.name, price: p.price, desc: '', emoji: p.emoji });
-    openCart();
+    // La pastille qui vole sert de confirmation : plus besoin d'ouvrir le
+    // tiroir à chaque ajout, ce qui coupait le parcours de celui qui compose
+    // une commande de plusieurs plats.
+    volVersLePanier(e.currentTarget);
   };
   return (
     <article className={`rounded-3xl overflow-hidden flex flex-col ${f ? 'bg-sara-green gold-frame shadow-[0_20px_44px_-24px_rgba(32,56,24,.85)]' : 'card-light'}`}>
-      <div className={`aspect-4-3 ${f ? 'bg-sara-greenDeep' : 'bg-sara-paperAlt'}`}>
+      <div className={`relative aspect-4-3 ${f ? 'bg-sara-greenDeep' : 'bg-sara-paperAlt'}`}>
         <Img src={p.image} emoji={p.emoji} alt={p.name} className="w-full h-full object-cover" dark={f} />
+        {user && (
+          <button
+            type="button"
+            onClick={() => toggleFavorite(p.id)}
+            aria-pressed={favori}
+            aria-label={favori ? `Retirer ${p.name} des favoris` : `Ajouter ${p.name} aux favoris`}
+            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow-md hover:bg-white active:scale-90 transition"
+          >
+            <Heart className={`w-5 h-5 transition ${favori ? 'text-sara-red fill-current' : 'text-sara-green/50'}`} />
+          </button>
+        )}
       </div>
       <div className="p-5 sm:p-6 flex flex-col flex-1">
         {/* Opacités : s'en tenir au barème Tailwind (…/10, /15, /20, /25…).
@@ -922,7 +2036,9 @@ function CtaFooter() {
             </p>
             <p className="mt-3 text-sara-mutedDark flex items-center gap-2">
               <Phone className="w-4 h-4 shrink-0 text-sara-goldLight" />
-              <a href={`tel:${INFO.phone.replace(/\s/g, '')}`} className="hover:text-sara-cream transition">{INFO.phone}</a>
+              {/* Appeler est l'action la plus utile sur mobile : la cible
+                  mérite la même hauteur qu'un bouton. */}
+              <a href={`tel:${INFO.phone.replace(/\s/g, '')}`} className="inline-block py-1.5 hover:text-sara-cream transition">{INFO.phone}</a>
             </p>
           </div>
 
@@ -955,7 +2071,7 @@ function FooterCol({ title, links }) {
       <h4 className="heading text-lg text-sara-goldLight">{title}</h4>
       <ul className="mt-4 space-y-3">
         {links.map(([h, l]) => (
-          <li key={l}><a href={h} className="text-sara-mutedDark hover:text-sara-cream transition">{l}</a></li>
+          <li key={l}><a href={h} className="inline-block py-1.5 text-sara-mutedDark hover:text-sara-cream transition">{l}</a></li>
         ))}
       </ul>
     </div>
@@ -983,19 +2099,39 @@ function useHashRoute() {
 export default function SaraSite() {
   const hash = useHashRoute();
   const isMenu = hash.startsWith(MENU_ROUTE);
+  const isRegister = hash.startsWith(REGISTER_ROUTE);
+  const isLogin = hash.startsWith(LOGIN_ROUTE);
+  const isAuth = isRegister || isLogin;
+  const isCheckout = hash.startsWith(CHECKOUT_ROUTE);
+  const isAccount = hash.startsWith(ACCOUNT_ROUTE);
+  const isResa = hash.startsWith(RESA_ROUTE);
+  const isResaChicha = hash.startsWith(RESA_CHICHA_ROUTE);
+  const trackId = (hash.match(/^#\/suivi\/([a-f0-9]{6,})$/) || [])[1] ?? null;
+  // Toute route « page » (#/…) part du haut ; les ancres (#faq) défilent.
+  const estUnePage = isMenu || isAuth || isCheckout || isAccount || isResa || !!trackId;
 
   useEffect(() => {
-    if (isMenu) { window.scrollTo(0, 0); return; }
+    if (estUnePage) { window.scrollTo(0, 0); return; }
     const id = hash.replace(/^#\/?/, '');
     if (id) { const el = document.getElementById(id); if (el) el.scrollIntoView(); }
-  }, [hash, isMenu]);
+  }, [hash, estUnePage]);
 
   return (
     <div className="sara-root min-h-screen">
       <a href={MENU_ROUTE} className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:px-4 focus:py-2 focus:rounded-xl focus:bg-sara-red focus:text-white">Aller au menu</a>
-      <Header />
+      <Header sticky={isMenu} />
       <CartDrawer />
-      {isMenu ? (
+      {trackId ? (
+        <OrderTrackingPage orderId={trackId} />
+      ) : isResa ? (
+        <ReservationPage chicha={isResaChicha} />
+      ) : isAccount ? (
+        <AccountPage />
+      ) : isCheckout ? (
+        <CheckoutPage />
+      ) : isAuth ? (
+        <AuthPage mode={isRegister ? 'register' : 'login'} />
+      ) : isMenu ? (
         <MenuPage />
       ) : (
         <main>

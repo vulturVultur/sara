@@ -3,8 +3,11 @@ dist
 dist-ssr
 *.local
 .DS_Store
-.env
-.env.local
+# Toute variante de .env est ignoree — `.env` seul ne couvrait ni `.env.bak`
+# ni `.env.prod` ni une copie de secours faite a la va-vite. Seul le gabarit
+# sans valeurs reste versionne.
+.env*
+!.env.example
 .claude/
 
 # Logs
